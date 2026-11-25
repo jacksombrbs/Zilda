@@ -1,5 +1,5 @@
-const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbxdtnT5iRd_g0y0ay23bJVwMeZRdyxM3P4YEISn10OPve1q1LbPC-CRYSgb5TW5A15EAQ/exec";
-const URL_FIREBASE = "COLE_AQUI_SUA_URL_DO_FIREBASE";
+const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbxH5-y7ZzMH8VK-WSalSWPIqDd9nbn0kwGujZxEKu12Vpp4M2ODtdQhquD58FVxmNiCNw/exec";
+const URL_FIREBASE = "https://zilda-9776b-default-rtdb.firebaseio.com/";
 const SENHA_MODOS = "2026";
 
 const ESTADO_PADRAO = {
