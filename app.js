@@ -15,10 +15,10 @@ const ESTADO_PADRAO = {
 };
 
 let bancoPerguntas = [];
-let filasSorteio = { 1: [], 2: [] };
 let modoAtual = "participante";
 let modoSolicitado = null;
 let alternativaSelecionada = "";
+let sorteando = false;
 let temporizadorResposta = null;
 let temporizadorRetornoEncerrado = null;
 let intervaloContagemEncerrado = null;
@@ -27,6 +27,7 @@ let temporizadorLimpezaApresentador = null;
 let bancoFirebase = null;
 let refEstado = null;
 let refHistorico = null;
+let refSorteio = null;
 let refConexao = null;
 let ouvintesPaineisAtivos = false;
 let ultimoEstadoRecebido = null;
@@ -69,6 +70,7 @@ function inicializarFirebase() {
   bancoFirebase = firebase.database();
   refEstado = bancoFirebase.ref("desafio_zilda/estado");
   refHistorico = bancoFirebase.ref("desafio_zilda/historico");
+  refSorteio = bancoFirebase.ref("desafio_zilda/sorteio");
   refConexao = bancoFirebase.ref(".info/connected");
 
   refEstado.on("value", (snapshot) => {
@@ -296,7 +298,6 @@ async function carregarPerguntas() {
 
     if (Array.isArray(dados.perguntas) && dados.perguntas.length > 0) {
       bancoPerguntas = dados.perguntas.filter((item) => Number(item.nivel) === 1 || Number(item.nivel) === 2);
-      filasSorteio = { 1: [], 2: [] };
       aviso.classList.add("oculto");
       botaoIniciar.disabled = false;
 
@@ -450,15 +451,43 @@ function embaralhar(lista) {
   return copia;
 }
 
-function sortearPergunta(nivel) {
+async function sortearPergunta(nivel) {
   const grupo = bancoPerguntas.filter((item) => Number(item.nivel) === nivel);
   if (grupo.length === 0) return null;
 
-  if (filasSorteio[nivel].length === 0) {
-    filasSorteio[nivel] = embaralhar(grupo);
+  const idsValidos = grupo.map((item) => String(item.id));
+
+  if (!refSorteio) {
+    return grupo[Math.floor(Math.random() * grupo.length)];
   }
 
-  return filasSorteio[nivel].pop();
+  try {
+    const resultado = await refSorteio.child(`nivel_${nivel}`).transaction((atual) => {
+      const filaSalva = atual && Array.isArray(atual.fila) ? atual.fila.map(String) : [];
+      const ultimoId = atual && atual.ultimo_id ? String(atual.ultimo_id) : "";
+
+      let fila = filaSalva.filter((id) => idsValidos.includes(id));
+
+      if (fila.length === 0) {
+        fila = embaralhar(idsValidos);
+        if (fila.length > 1 && fila[fila.length - 1] === ultimoId) {
+          [fila[0], fila[fila.length - 1]] = [fila[fila.length - 1], fila[0]];
+        }
+      }
+
+      const idSorteado = fila.pop();
+      return {
+        fila: fila.length > 0 ? fila : null,
+        ultimo_id: idSorteado
+      };
+    });
+
+    const dados = resultado.committed ? resultado.snapshot.val() : null;
+    const encontrada = dados && grupo.find((item) => String(item.id) === String(dados.ultimo_id));
+    if (encontrada) return encontrada;
+  } catch (erro) {}
+
+  return grupo[Math.floor(Math.random() * grupo.length)];
 }
 
 function listarAlternativas(pergunta) {
@@ -476,25 +505,32 @@ function obterTextoAlternativa(pergunta, letra) {
   return encontrada ? encontrada.texto : "";
 }
 
-function iniciarRodada(nome) {
-  const primeira = sortearPergunta(1);
-  if (!primeira) return;
+async function iniciarRodada(nome) {
+  if (sorteando) return;
+  sorteando = true;
 
-  cancelarTemporizadoresParticipante();
+  try {
+    const primeira = await sortearPergunta(1);
+    if (!primeira) return;
 
-  estadoJogo = {
-    participante: nome,
-    etapa: "PERGUNTA_1",
-    nivel: 1,
-    perguntaAtual: primeira,
-    respostaEscolhida: "",
-    acertou: null,
-    premio: "",
-    sessaoId: gerarSessaoId()
-  };
+    cancelarTemporizadoresParticipante();
 
-  exibirPergunta();
-  enviarEstadoAtual();
+    estadoJogo = {
+      participante: nome,
+      etapa: "PERGUNTA_1",
+      nivel: 1,
+      perguntaAtual: primeira,
+      respostaEscolhida: "",
+      acertou: null,
+      premio: "",
+      sessaoId: gerarSessaoId()
+    };
+
+    exibirPergunta();
+    enviarEstadoAtual();
+  } finally {
+    sorteando = false;
+  }
 }
 
 function exibirPergunta() {
@@ -613,19 +649,26 @@ function pararNaPrimeiraPergunta() {
   });
 }
 
-function avancarParaSegundaPergunta() {
-  const segunda = sortearPergunta(2);
-  if (!segunda) return;
+async function avancarParaSegundaPergunta() {
+  if (sorteando) return;
+  sorteando = true;
 
-  estadoJogo.etapa = "PERGUNTA_2";
-  estadoJogo.nivel = 2;
-  estadoJogo.perguntaAtual = segunda;
-  estadoJogo.respostaEscolhida = "";
-  estadoJogo.acertou = null;
-  estadoJogo.premio = "";
+  try {
+    const segunda = await sortearPergunta(2);
+    if (!segunda) return;
 
-  exibirPergunta();
-  enviarEstadoAtual();
+    estadoJogo.etapa = "PERGUNTA_2";
+    estadoJogo.nivel = 2;
+    estadoJogo.perguntaAtual = segunda;
+    estadoJogo.respostaEscolhida = "";
+    estadoJogo.acertou = null;
+    estadoJogo.premio = "";
+
+    exibirPergunta();
+    enviarEstadoAtual();
+  } finally {
+    sorteando = false;
+  }
 }
 
 function encerrarRodada({
@@ -732,7 +775,9 @@ function atualizarApresentador(estado) {
   const botaoEncerrar = document.getElementById("botao-encerrar-participacao");
   botaoEncerrar.disabled = !estado.etapa || estado.etapa === "INICIO" || estado.etapa === "ENCERRADO";
 
-  const pergunta = bancoPerguntas.find((item) => Number(item.id) === Number(estado.pergunta_id));
+  const pergunta = estado.pergunta_id
+    ? bancoPerguntas.find((item) => String(item.id) === String(estado.pergunta_id))
+    : null;
   const enunciado = document.getElementById("apresentador-enunciado");
   const alternativas = document.getElementById("apresentador-alternativas");
   const gabarito = document.getElementById("apresentador-gabarito");
@@ -835,7 +880,9 @@ function atualizarTv(estado) {
   }
 
   encerrado.classList.add("oculto");
-  const pergunta = bancoPerguntas.find((item) => Number(item.id) === Number(estado.pergunta_id));
+  const pergunta = estado.pergunta_id
+    ? bancoPerguntas.find((item) => String(item.id) === String(estado.pergunta_id))
+    : null;
 
   if (!pergunta || !estado.etapa || estado.etapa === "INICIO") {
     espera.classList.remove("oculto");
