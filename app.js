@@ -1,13 +1,28 @@
 const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbxH5-y7ZzMH8VK-WSalSWPIqDd9nbn0kwGujZxEKu12Vpp4M2ODtdQhquD58FVxmNiCNw/exec";
+const URL_FIREBASE = "https://zilda-9776b-default-rtdb.firebaseio.com/";
 const SENHA_MODOS = "2026";
-const INTERVALO_SINCRONIZACAO_MS = 1200;
+
+const ESTADO_PADRAO = {
+  participante: "AGUARDANDO PARTICIPANTE...",
+  etapa: "INICIO",
+  nivel: "1",
+  pergunta_id: "",
+  resposta_escolhida: "",
+  acertou: "",
+  premio_atual: ""
+};
 
 let bancoPerguntas = [];
 let filasSorteio = { 1: [], 2: [] };
-let temporizadorAtualizacao = null;
-let sincronizando = false;
 let modoAtual = "participante";
 let modoSolicitado = null;
+
+let bancoFirebase = null;
+let refEstado = null;
+let refHistorico = null;
+let refConexao = null;
+let ouvintesAtivos = false;
+let ultimoEstadoRecebido = null;
 
 let estadoJogo = {
   participante: "AGUARDANDO PARTICIPANTE...",
@@ -21,7 +36,7 @@ let estadoJogo = {
 
 document.addEventListener("DOMContentLoaded", async () => {
   configurarEventos();
-  await carregarPerguntas();
+  inicializarFirebase();
 
   const parametros = new URLSearchParams(window.location.search);
   const modoUrl = parametros.get("modo");
@@ -30,7 +45,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     ativarModo("participante");
   }
+
+  await carregarPerguntas();
 });
+
+function inicializarFirebase() {
+  if (!URL_FIREBASE || URL_FIREBASE.includes("COLE_AQUI") || typeof firebase === "undefined") {
+    return false;
+  }
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp({ databaseURL: URL_FIREBASE });
+  }
+
+  bancoFirebase = firebase.database();
+  refEstado = bancoFirebase.ref("desafio_zilda/estado");
+  refHistorico = bancoFirebase.ref("desafio_zilda/historico");
+  refConexao = bancoFirebase.ref(".info/connected");
+  return true;
+}
 
 function configurarEventos() {
   document.getElementById("botao-modo-participante").addEventListener("click", () => solicitarTrocaModo("participante"));
@@ -63,7 +96,7 @@ function configurarEventos() {
   document.getElementById("botao-avancar").addEventListener("click", avancarParaSegundaPergunta);
   document.getElementById("botao-proximo").addEventListener("click", reiniciarParaInicio);
 
-  document.getElementById("botao-atualizar-lista").addEventListener("click", sincronizarPaineis);
+  document.getElementById("botao-atualizar-lista").addEventListener("click", recarregarManual);
   document.getElementById("botao-limpar-lista").addEventListener("click", () => {
     document.getElementById("modal-limpar").classList.remove("oculto");
   });
@@ -124,30 +157,84 @@ function ativarModo(modo) {
   });
 
   if (modo === "apresentador" || modo === "tv") {
-    iniciarSincronizacao();
+    conectarPaineisTempoReal();
   } else {
-    pararSincronizacao();
+    desconectarPaineisTempoReal();
   }
 }
 
-function iniciarSincronizacao() {
-  pararSincronizacao();
-  cicloSincronizacao();
+function conectarPaineisTempoReal() {
+  const status = document.getElementById("status-conexao");
+
+  if (!bancoFirebase) {
+    status.textContent = "CONFIGURE O FIREBASE";
+    status.classList.add("desconectado");
+    return;
+  }
+
+  if (ouvintesAtivos) return;
+  ouvintesAtivos = true;
+
+  // Monitora conexão em tempo real
+  refConexao.on("value", (snapshot) => {
+    if (snapshot.val() === true) {
+      status.textContent = "CONECTADO";
+      status.classList.remove("desconectado");
+    } else {
+      status.textContent = "SEM CONEXÃO";
+      status.classList.add("desconectado");
+    }
+  });
+
+  // Recebe qualquer mudança do Participante instantaneamente
+  refEstado.on("value", (snapshot) => {
+    ultimoEstadoRecebido = snapshot.val() || ESTADO_PADRAO;
+    atualizarApresentador(ultimoEstadoRecebido);
+    atualizarTv(ultimoEstadoRecebido);
+  });
+
+  // Recebe o histórico de participantes instantaneamente
+  refHistorico.limitToLast(25).on("value", (snapshot) => {
+    const lista = [];
+    snapshot.forEach((filho) => {
+      const item = filho.val();
+      if (item) lista.push(item);
+    });
+    lista.reverse();
+    atualizarListas(lista);
+  });
 }
 
-function pararSincronizacao() {
-  if (temporizadorAtualizacao) {
-    clearTimeout(temporizadorAtualizacao);
-    temporizadorAtualizacao = null;
-  }
+function desconectarPaineisTempoReal() {
+  if (!ouvintesAtivos || !bancoFirebase) return;
+  refConexao.off();
+  refEstado.off();
+  refHistorico.off();
+  ouvintesAtivos = false;
 }
 
-async function cicloSincronizacao() {
-  if (modoAtual !== "apresentador" && modoAtual !== "tv") return;
-  await sincronizarPaineis();
-  if (modoAtual === "apresentador" || modoAtual === "tv") {
-    temporizadorAtualizacao = setTimeout(cicloSincronizacao, INTERVALO_SINCRONIZACAO_MS);
+async function recarregarManual() {
+  if (bancoPerguntas.length === 0) {
+    await carregarPerguntas();
   }
+  if (!bancoFirebase) return;
+
+  const [snapEstado, snapHistorico] = await Promise.all([
+    refEstado.once("value"),
+    refHistorico.limitToLast(25).once("value")
+  ]);
+
+  ultimoEstadoRecebido = snapEstado.val() || ESTADO_PADRAO;
+  atualizarApresentador(ultimoEstadoRecebido);
+  atualizarTv(ultimoEstadoRecebido);
+
+  const lista = [];
+  snapHistorico.forEach((filho) => {
+    const item = filho.val();
+    if (item) lista.push(item);
+  });
+  lista.reverse();
+  atualizarListas(lista);
 }
 
 async function carregarPerguntas() {
@@ -163,6 +250,12 @@ async function carregarPerguntas() {
       filasSorteio = { 1: [], 2: [] };
       aviso.classList.add("oculto");
       botaoIniciar.disabled = false;
+
+      // Se o Firebase já entregou o estado antes das perguntas terminarem de baixar, atualiza a tela agora
+      if (ultimoEstadoRecebido) {
+        atualizarApresentador(ultimoEstadoRecebido);
+        atualizarTv(ultimoEstadoRecebido);
+      }
       return;
     }
   } catch (erro) {}
@@ -172,14 +265,14 @@ async function carregarPerguntas() {
   botaoIniciar.disabled = true;
 }
 
-async function enviarParaPlanilha(dados) {
+function enviarParaPlanilhaEmSegundoPlano(dados) {
   try {
-    await fetch(URL_PLANILHA, {
+    fetch(URL_PLANILHA, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(dados)
-    });
+    }).catch(() => {});
   } catch (erro) {}
 }
 
@@ -196,16 +289,16 @@ function montarPayloadEstado() {
 }
 
 function enviarEstadoAtual() {
-  enviarParaPlanilha({
-    acao: "atualizar_estado",
-    ...montarPayloadEstado()
-  });
+  if (!refEstado) return;
+  refEstado.set(montarPayloadEstado());
 }
 
-async function limparListaParticipantes() {
+function limparListaParticipantes() {
   document.getElementById("modal-limpar").classList.add("oculto");
-  atualizarListas([]);
-  await enviarParaPlanilha({ acao: "limpar_historico" });
+  if (refHistorico) {
+    refHistorico.remove();
+  }
+  enviarParaPlanilhaEmSegundoPlano({ acao: "limpar_historico" });
 }
 
 function embaralhar(lista) {
@@ -404,14 +497,24 @@ function encerrarRodada({
 
   exibirEtapa("etapa-resultado");
 
-  // Envia estado + histórico em um único POST
-  enviarParaPlanilha({
-    acao: "encerrar_rodada",
-    ...montarPayloadEstado(),
+  const registroHistorico = {
+    participante: estadoJogo.participante,
     resultado_final: resultadoHistorico,
     premio: premioHistorico,
     perguntas_respondidas: String(totalPerguntas),
     ajuda_utilizada: ""
+  };
+
+  // 1) Atualiza TV e Apresentador instantaneamente via Firebase
+  enviarEstadoAtual();
+  if (refHistorico) {
+    refHistorico.push(registroHistorico);
+  }
+
+  // 2) Salva backup na Planilha em segundo plano (sem travar nada)
+  enviarParaPlanilhaEmSegundoPlano({
+    acao: "registrar_historico",
+    ...registroHistorico
   });
 }
 
@@ -434,37 +537,6 @@ function exibirEtapa(idVisivel) {
   ["etapa-inicio", "etapa-pergunta", "etapa-decisao", "etapa-resultado"].forEach((id) => {
     document.getElementById(id).classList.toggle("oculto", id !== idVisivel);
   });
-}
-
-async function sincronizarPaineis() {
-  if (sincronizando) return;
-  sincronizando = true;
-  const status = document.getElementById("status-conexao");
-
-  try {
-    if (bancoPerguntas.length === 0) {
-      await carregarPerguntas();
-    }
-
-    const resposta = await fetch(`${URL_PLANILHA}?acao=painel&_=${Date.now()}`, { cache: "no-store" });
-    const dados = await resposta.json();
-
-    status.textContent = "CONECTADO";
-    status.classList.remove("desconectado");
-
-    if (dados.estado) {
-      atualizarApresentador(dados.estado);
-      atualizarTv(dados.estado);
-    }
-
-    atualizarListas(Array.isArray(dados.historico) ? dados.historico : []);
-  } catch (erro) {
-    status.textContent = "SEM CONEXÃO";
-    status.classList.add("desconectado");
-    exibirListasSemConexao();
-  } finally {
-    sincronizando = false;
-  }
 }
 
 function nomearEtapa(etapa) {
@@ -596,12 +668,6 @@ function atualizarListas(lista) {
         })
         .join("");
 
-  document.getElementById("lista-apresentador").innerHTML = html;
-  document.getElementById("lista-tv").innerHTML = html;
-}
-
-function exibirListasSemConexao() {
-  const html = `<li class="item-vazio">Planilha offline. Verifique a conexão.</li>`;
   document.getElementById("lista-apresentador").innerHTML = html;
   document.getElementById("lista-tv").innerHTML = html;
 }
