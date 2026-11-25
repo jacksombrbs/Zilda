@@ -9,7 +9,9 @@ const ESTADO_PADRAO = {
   pergunta_id: "",
   resposta_escolhida: "",
   acertou: "",
-  premio_atual: ""
+  premio_atual: "",
+  sessao_id: "",
+  encerrado_em: 0
 };
 
 let bancoPerguntas = [];
@@ -18,14 +20,15 @@ let modoAtual = "participante";
 let modoSolicitado = null;
 let alternativaSelecionada = "";
 let temporizadorResposta = null;
+let temporizadorRetornoEncerrado = null;
+let intervaloContagemEncerrado = null;
+let temporizadorLimpezaApresentador = null;
 
 let bancoFirebase = null;
 let refEstado = null;
 let refHistorico = null;
-let refEncerrar = null;
 let refConexao = null;
-let ouvintesAtivos = false;
-let primeiroEventoEncerrar = true;
+let ouvintesPaineisAtivos = false;
 let ultimoEstadoRecebido = null;
 
 let estadoJogo = {
@@ -35,7 +38,8 @@ let estadoJogo = {
   perguntaAtual: null,
   respostaEscolhida: "",
   acertou: null,
-  premio: ""
+  premio: "",
+  sessaoId: ""
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -65,16 +69,17 @@ function inicializarFirebase() {
   bancoFirebase = firebase.database();
   refEstado = bancoFirebase.ref("desafio_zilda/estado");
   refHistorico = bancoFirebase.ref("desafio_zilda/historico");
-  refEncerrar = bancoFirebase.ref("desafio_zilda/comando_encerrar");
   refConexao = bancoFirebase.ref(".info/connected");
 
-  refEncerrar.on("value", () => {
-    if (primeiroEventoEncerrar) {
-      primeiroEventoEncerrar = false;
-      return;
-    }
-    if (modoAtual === "participante" && estadoJogo.etapa !== "INICIO") {
-      limparEstadoLocalParticipante();
+  refEstado.on("value", (snapshot) => {
+    ultimoEstadoRecebido = snapshot.val() || { ...ESTADO_PADRAO };
+
+    if (modoAtual === "participante") {
+      verificarEncerramentoRemoto(ultimoEstadoRecebido);
+    } else if (modoAtual === "apresentador") {
+      atualizarApresentador(ultimoEstadoRecebido);
+    } else if (modoAtual === "tv") {
+      atualizarTv(ultimoEstadoRecebido);
     }
   });
 
@@ -116,6 +121,7 @@ function configurarEventos() {
   document.getElementById("botao-parar").addEventListener("click", pararNaPrimeiraPergunta);
   document.getElementById("botao-avancar").addEventListener("click", avancarParaSegundaPergunta);
   document.getElementById("botao-proximo").addEventListener("click", reiniciarParaInicio);
+  document.getElementById("botao-voltar-inicio-encerrado").addEventListener("click", limparEstadoLocalParticipante);
 
   document.getElementById("botao-atualizar-lista").addEventListener("click", recarregarManual);
 
@@ -134,6 +140,24 @@ function configurarEventos() {
     document.getElementById("modal-encerrar").classList.add("oculto");
   });
   document.getElementById("botao-confirmar-encerrar").addEventListener("click", encerrarParticipacaoAtual);
+
+  window.addEventListener("resize", () => {
+    if (modoAtual === "tv") {
+      requestAnimationFrame(() => {
+        ajustarTamanhoTextoTv();
+        ajustarListaTv();
+      });
+    }
+  });
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      if (modoAtual === "tv") {
+        ajustarTamanhoTextoTv();
+        ajustarListaTv();
+      }
+    });
+  }
 }
 
 function solicitarTrocaModo(destino) {
@@ -168,6 +192,7 @@ function fecharModalSenha() {
 function ativarModo(modo) {
   modoAtual = modo;
   document.body.className = `modo-${modo}`;
+  document.documentElement.classList.toggle("modo-tv-ativo", modo === "tv");
 
   const visoes = {
     participante: document.getElementById("visao-participante"),
@@ -188,6 +213,10 @@ function ativarModo(modo) {
 
   if (modo === "apresentador" || modo === "tv") {
     conectarPaineisTempoReal();
+    if (ultimoEstadoRecebido) {
+      if (modo === "apresentador") atualizarApresentador(ultimoEstadoRecebido);
+      if (modo === "tv") atualizarTv(ultimoEstadoRecebido);
+    }
   } else {
     desconectarPaineisTempoReal();
   }
@@ -202,8 +231,8 @@ function conectarPaineisTempoReal() {
     return;
   }
 
-  if (ouvintesAtivos) return;
-  ouvintesAtivos = true;
+  if (ouvintesPaineisAtivos) return;
+  ouvintesPaineisAtivos = true;
 
   refConexao.on("value", (snapshot) => {
     if (snapshot.val() === true) {
@@ -213,12 +242,6 @@ function conectarPaineisTempoReal() {
       status.textContent = "SEM CONEXÃO";
       status.classList.add("desconectado");
     }
-  });
-
-  refEstado.on("value", (snapshot) => {
-    ultimoEstadoRecebido = snapshot.val() || ESTADO_PADRAO;
-    atualizarApresentador(ultimoEstadoRecebido);
-    atualizarTv(ultimoEstadoRecebido);
   });
 
   refHistorico.limitToLast(25).on("value", (snapshot) => {
@@ -233,11 +256,10 @@ function conectarPaineisTempoReal() {
 }
 
 function desconectarPaineisTempoReal() {
-  if (!ouvintesAtivos || !bancoFirebase) return;
+  if (!ouvintesPaineisAtivos || !bancoFirebase) return;
   refConexao.off();
-  refEstado.off();
   refHistorico.off();
-  ouvintesAtivos = false;
+  ouvintesPaineisAtivos = false;
 }
 
 async function recarregarManual() {
@@ -251,7 +273,7 @@ async function recarregarManual() {
     refHistorico.limitToLast(25).once("value")
   ]);
 
-  ultimoEstadoRecebido = snapEstado.val() || ESTADO_PADRAO;
+  ultimoEstadoRecebido = snapEstado.val() || { ...ESTADO_PADRAO };
   atualizarApresentador(ultimoEstadoRecebido);
   atualizarTv(ultimoEstadoRecebido);
 
@@ -279,8 +301,8 @@ async function carregarPerguntas() {
       botaoIniciar.disabled = false;
 
       if (ultimoEstadoRecebido) {
-        atualizarApresentador(ultimoEstadoRecebido);
-        atualizarTv(ultimoEstadoRecebido);
+        if (modoAtual === "apresentador") atualizarApresentador(ultimoEstadoRecebido);
+        if (modoAtual === "tv") atualizarTv(ultimoEstadoRecebido);
       }
       return;
     }
@@ -302,6 +324,10 @@ function enviarParaPlanilhaEmSegundoPlano(dados) {
   } catch (erro) {}
 }
 
+function gerarSessaoId() {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function montarPayloadEstado() {
   return {
     participante: estadoJogo.participante,
@@ -310,7 +336,9 @@ function montarPayloadEstado() {
     pergunta_id: estadoJogo.perguntaAtual ? String(estadoJogo.perguntaAtual.id) : "",
     resposta_escolhida: estadoJogo.respostaEscolhida,
     acertou: estadoJogo.acertou === null ? "" : (estadoJogo.acertou ? "SIM" : "NAO"),
-    premio_atual: estadoJogo.premio
+    premio_atual: estadoJogo.premio,
+    sessao_id: estadoJogo.sessaoId,
+    encerrado_em: 0
   };
 }
 
@@ -329,12 +357,87 @@ function limparListaParticipantes() {
 
 function encerrarParticipacaoAtual() {
   document.getElementById("modal-encerrar").classList.add("oculto");
-  limparEstadoLocalParticipante();
-  if (refEstado) {
-    refEstado.set({ ...ESTADO_PADRAO });
+
+  const nomeAtual = (ultimoEstadoRecebido && ultimoEstadoRecebido.participante) || "PARTICIPANTE";
+  const sessaoAtual = (ultimoEstadoRecebido && ultimoEstadoRecebido.sessao_id) || "";
+  const marcaEncerramento = Date.now();
+
+  if (temporizadorLimpezaApresentador) {
+    clearTimeout(temporizadorLimpezaApresentador);
+    temporizadorLimpezaApresentador = null;
   }
-  if (refEncerrar) {
-    refEncerrar.set(Date.now());
+
+  if (refEstado) {
+    refEstado.set({
+      ...ESTADO_PADRAO,
+      participante: nomeAtual,
+      etapa: "ENCERRADO",
+      sessao_id: sessaoAtual,
+      encerrado_em: marcaEncerramento
+    });
+
+    temporizadorLimpezaApresentador = setTimeout(() => {
+      temporizadorLimpezaApresentador = null;
+      if (
+        ultimoEstadoRecebido &&
+        ultimoEstadoRecebido.etapa === "ENCERRADO" &&
+        ultimoEstadoRecebido.encerrado_em === marcaEncerramento
+      ) {
+        refEstado.set({ ...ESTADO_PADRAO });
+      }
+    }, 5500);
+  }
+}
+
+function verificarEncerramentoRemoto(estado) {
+  if (!estado || estado.etapa !== "ENCERRADO") return;
+  if (estadoJogo.etapa === "INICIO" || estadoJogo.etapa === "ENCERRADO") return;
+  if (estado.sessao_id && estadoJogo.sessaoId && estado.sessao_id !== estadoJogo.sessaoId) return;
+
+  exibirFeedbackEncerramentoParticipante();
+}
+
+function exibirFeedbackEncerramentoParticipante() {
+  cancelarTemporizadoresParticipante();
+
+  const nome = estadoJogo.participante && estadoJogo.participante !== "AGUARDANDO PARTICIPANTE..."
+    ? estadoJogo.participante
+    : "PARTICIPANTE";
+
+  estadoJogo.etapa = "ENCERRADO";
+  document.getElementById("nome-encerrado").textContent = nome;
+  exibirEtapa("etapa-encerrado");
+
+  let segundosRestantes = 5;
+  const textoContagem = document.getElementById("contagem-encerrado");
+  textoContagem.textContent = `Voltando à tela inicial em ${segundosRestantes} segundos...`;
+
+  intervaloContagemEncerrado = setInterval(() => {
+    segundosRestantes -= 1;
+    if (segundosRestantes > 1) {
+      textoContagem.textContent = `Voltando à tela inicial em ${segundosRestantes} segundos...`;
+    } else if (segundosRestantes === 1) {
+      textoContagem.textContent = "Voltando à tela inicial em 1 segundo...";
+    }
+  }, 1000);
+
+  temporizadorRetornoEncerrado = setTimeout(() => {
+    limparEstadoLocalParticipante();
+  }, 5000);
+}
+
+function cancelarTemporizadoresParticipante() {
+  if (temporizadorResposta) {
+    clearTimeout(temporizadorResposta);
+    temporizadorResposta = null;
+  }
+  if (temporizadorRetornoEncerrado) {
+    clearTimeout(temporizadorRetornoEncerrado);
+    temporizadorRetornoEncerrado = null;
+  }
+  if (intervaloContagemEncerrado) {
+    clearInterval(intervaloContagemEncerrado);
+    intervaloContagemEncerrado = null;
   }
 }
 
@@ -377,10 +480,7 @@ function iniciarRodada(nome) {
   const primeira = sortearPergunta(1);
   if (!primeira) return;
 
-  if (temporizadorResposta) {
-    clearTimeout(temporizadorResposta);
-    temporizadorResposta = null;
-  }
+  cancelarTemporizadoresParticipante();
 
   estadoJogo = {
     participante: nome,
@@ -389,7 +489,8 @@ function iniciarRodada(nome) {
     perguntaAtual: primeira,
     respostaEscolhida: "",
     acertou: null,
-    premio: ""
+    premio: "",
+    sessaoId: gerarSessaoId()
   };
 
   exibirPergunta();
@@ -584,10 +685,7 @@ function encerrarRodada({
 }
 
 function limparEstadoLocalParticipante() {
-  if (temporizadorResposta) {
-    clearTimeout(temporizadorResposta);
-    temporizadorResposta = null;
-  }
+  cancelarTemporizadoresParticipante();
   document.getElementById("campo-nome").value = "";
   alternativaSelecionada = "";
   estadoJogo = {
@@ -597,7 +695,8 @@ function limparEstadoLocalParticipante() {
     perguntaAtual: null,
     respostaEscolhida: "",
     acertou: null,
-    premio: ""
+    premio: "",
+    sessaoId: ""
   };
   exibirEtapa("etapa-inicio");
 }
@@ -608,7 +707,7 @@ function reiniciarParaInicio() {
 }
 
 function exibirEtapa(idVisivel) {
-  ["etapa-inicio", "etapa-pergunta", "etapa-decisao", "etapa-resultado"].forEach((id) => {
+  ["etapa-inicio", "etapa-pergunta", "etapa-decisao", "etapa-resultado", "etapa-encerrado"].forEach((id) => {
     document.getElementById(id).classList.toggle("oculto", id !== idVisivel);
   });
 }
@@ -619,7 +718,8 @@ function nomearEtapa(etapa) {
     PERGUNTA_1: "RESPONDENDO A 1ª PERGUNTA",
     DECISAO_PARAR: "ESCOLHENDO: PARAR OU ARRISCAR A 2ª PERGUNTA",
     PERGUNTA_2: "RESPONDENDO A 2ª PERGUNTA (VALE O DOBRO)",
-    RESULTADO: "RODADA ENCERRADA"
+    RESULTADO: "RODADA ENCERRADA",
+    ENCERRADO: "PARTICIPAÇÃO ENCERRADA"
   };
   return mapa[etapa] || etapa || "AGUARDANDO PARTICIPANTE";
 }
@@ -630,7 +730,7 @@ function atualizarApresentador(estado) {
   document.getElementById("apresentador-etapa").textContent = nomearEtapa(estado.etapa);
 
   const botaoEncerrar = document.getElementById("botao-encerrar-participacao");
-  botaoEncerrar.disabled = !estado.etapa || estado.etapa === "INICIO";
+  botaoEncerrar.disabled = !estado.etapa || estado.etapa === "INICIO" || estado.etapa === "ENCERRADO";
 
   const pergunta = bancoPerguntas.find((item) => Number(item.id) === Number(estado.pergunta_id));
   const enunciado = document.getElementById("apresentador-enunciado");
@@ -638,6 +738,17 @@ function atualizarApresentador(estado) {
   const gabarito = document.getElementById("apresentador-gabarito");
   const comentario = document.getElementById("apresentador-comentario");
   const faixaFeedback = document.getElementById("apresentador-feedback-resposta");
+
+  if (estado.etapa === "ENCERRADO") {
+    document.getElementById("apresentador-rotulo-pergunta").textContent = "STATUS DA RODADA";
+    faixaFeedback.className = "feedback-apresentador errou";
+    faixaFeedback.textContent = `✕ PARTICIPAÇÃO DE ${estado.participante || "PARTICIPANTE"} ENCERRADA PELO APRESENTADOR.`;
+    enunciado.textContent = "Aguardando o próximo participante iniciar o desafio.";
+    alternativas.innerHTML = "";
+    gabarito.textContent = "—";
+    comentario.textContent = "A tela do visitante e a TV estão exibindo o aviso de encerramento.";
+    return;
+  }
 
   if (!pergunta || estado.etapa === "INICIO") {
     document.getElementById("apresentador-rotulo-pergunta").textContent = "PERGUNTA SORTEADA";
@@ -707,7 +818,23 @@ function atualizarApresentador(estado) {
 
 function atualizarTv(estado) {
   const espera = document.getElementById("tv-espera");
+  const encerrado = document.getElementById("tv-encerrado");
   const ativo = document.getElementById("tv-ativo");
+
+  if (estado && estado.etapa === "ENCERRADO") {
+    espera.classList.add("oculto");
+    ativo.classList.add("oculto");
+    encerrado.classList.remove("oculto");
+
+    const nome = estado.participante && estado.participante !== "AGUARDANDO PARTICIPANTE..."
+      ? estado.participante
+      : "O PARTICIPANTE";
+    document.getElementById("tv-mensagem-encerrado").textContent =
+      `A participação de ${nome} foi encerrada pelo apresentador.`;
+    return;
+  }
+
+  encerrado.classList.add("oculto");
   const pergunta = bancoPerguntas.find((item) => Number(item.id) === Number(estado.pergunta_id));
 
   if (!pergunta || !estado.etapa || estado.etapa === "INICIO") {
@@ -765,6 +892,45 @@ function atualizarTv(estado) {
     faixa.className = "faixa-resultado-tv oculto";
     faixa.textContent = "";
   }
+
+  requestAnimationFrame(() => {
+    ajustarTamanhoTextoTv();
+    ajustarListaTv();
+  });
+}
+
+function ajustarTamanhoTextoTv() {
+  if (modoAtual !== "tv") return;
+  const tvAtivo = document.getElementById("tv-ativo");
+  if (!tvAtivo || tvAtivo.classList.contains("oculto")) return;
+
+  let escala = 1;
+  tvAtivo.style.setProperty("--escala-tv", String(escala));
+
+  while (tvAtivo.scrollHeight > tvAtivo.clientHeight + 1 && escala > 0.42) {
+    escala = Number((escala - 0.03).toFixed(2));
+    tvAtivo.style.setProperty("--escala-tv", String(escala));
+  }
+}
+
+function ajustarListaTv() {
+  if (modoAtual !== "tv") return;
+  const listaTv = document.getElementById("lista-tv");
+  if (!listaTv) return;
+
+  const itens = Array.from(listaTv.children);
+  itens.forEach((item) => {
+    item.style.display = "";
+  });
+
+  const alturaMaxima = listaTv.clientHeight;
+  if (alturaMaxima <= 0) return;
+
+  for (const item of itens) {
+    if (item.offsetTop + item.offsetHeight > alturaMaxima + 1) {
+      item.style.display = "none";
+    }
+  }
 }
 
 function renderizarItensHistorico(lista) {
@@ -797,5 +963,8 @@ function renderizarItensHistorico(lista) {
 
 function atualizarListas(lista) {
   document.getElementById("lista-apresentador").innerHTML = renderizarItensHistorico(lista);
-  document.getElementById("lista-tv").innerHTML = renderizarItensHistorico((lista || []).slice(0, 7));
+  document.getElementById("lista-tv").innerHTML = renderizarItensHistorico((lista || []).slice(0, 10));
+  if (modoAtual === "tv") {
+    requestAnimationFrame(ajustarListaTv);
+  }
 }

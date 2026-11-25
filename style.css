@@ -20,6 +20,11 @@ html {
   overflow-y: scroll;
 }
 
+html.modo-tv-ativo {
+  overflow: hidden;
+  height: 100%;
+}
+
 body {
   background-color: var(--fundo-creme);
   color: var(--preto);
@@ -28,6 +33,15 @@ body {
   position: relative;
   overflow-x: hidden;
   line-height: 1.5;
+}
+
+body.modo-tv {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .filete-topo-esquerdo {
@@ -75,6 +89,26 @@ body {
   background-color: var(--azul);
 }
 
+body.modo-tv .filete-topo-esquerdo .bloco-verde {
+  width: 160px;
+  height: 22px;
+}
+
+body.modo-tv .filete-topo-esquerdo .bloco-amarelo {
+  width: 24px;
+  height: 80px;
+}
+
+body.modo-tv .filete-base-direito .bloco-azul-vertical {
+  width: 24px;
+  height: 80px;
+}
+
+body.modo-tv .filete-base-direito .bloco-azul-horizontal {
+  width: 180px;
+  height: 22px;
+}
+
 .cabecalho {
   position: relative;
   z-index: 3;
@@ -85,6 +119,14 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+}
+
+body.modo-tv .cabecalho {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px 28px 6px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .marca {
@@ -99,10 +141,24 @@ body {
   display: block;
 }
 
+body.modo-tv .logo-svg {
+  width: 82px;
+}
+
 .seletor-modos {
   display: flex;
   gap: 6px;
   padding-top: 6px;
+}
+
+body.modo-tv .seletor-modos {
+  padding-top: 0;
+  opacity: 0.2;
+  transition: opacity 0.2s ease;
+}
+
+body.modo-tv .seletor-modos:hover {
+  opacity: 1;
 }
 
 .botao-icone {
@@ -135,21 +191,22 @@ body {
   color: var(--fundo-creme);
 }
 
-body.modo-tv .seletor-modos {
-  opacity: 0.2;
-  transition: opacity 0.2s ease;
-}
-
-body.modo-tv .seletor-modos:hover {
-  opacity: 1;
-}
-
 .conteudo {
   position: relative;
   z-index: 2;
   max-width: 1280px;
   margin: 0 auto;
   padding: 12px 36px 64px;
+}
+
+body.modo-tv .conteudo {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  padding: 6px 28px 20px;
+  display: flex;
+  overflow: hidden;
 }
 
 .oculto {
@@ -217,6 +274,13 @@ body.modo-tv .seletor-modos:hover {
 .texto-destaque {
   font-size: 1.2rem;
   line-height: 1.55;
+}
+
+.aviso-contagem {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--vermelho);
+  margin-bottom: 22px;
 }
 
 .aviso-erro {
@@ -737,74 +801,134 @@ body.modo-tv .seletor-modos:hover {
   color: var(--cinza-texto);
 }
 
+#visao-tv {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  overflow: hidden;
+}
+
 .grade-tv {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   display: grid;
-  grid-template-columns: 1.65fr 0.75fr;
-  gap: 28px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1.75fr) minmax(260px, 0.65fr);
+  gap: 22px;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .grade-tv .cartao {
   max-width: 100%;
   margin: 0;
-  padding: 40px;
+  padding: 26px 32px;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.tv-espera {
-  padding: 48px 12px;
+.tv-espera,
+.tv-encerrado {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  padding: 12px 8px;
 }
 
 .titulo-tv {
-  font-size: clamp(2.2rem, 4vw, 3.4rem);
+  font-size: clamp(2rem, 3.6vw, 3.2rem);
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
   line-height: 1.1;
 }
 
 .subtitulo-tv {
-  font-size: clamp(1.2rem, 2vw, 1.65rem);
+  font-size: clamp(1.1rem, 1.9vw, 1.55rem);
   font-weight: 500;
   color: var(--cinza-texto);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
-.nome-tv {
-  font-size: 1.15rem;
+.tv-ativo {
+  --escala-tv: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tv-ativo > * {
+  flex-shrink: 0;
+}
+
+.tv-ativo .cabecalho-pergunta {
+  padding-bottom: calc(12px * var(--escala-tv));
+  margin-bottom: calc(18px * var(--escala-tv));
+  gap: calc(10px * var(--escala-tv));
+}
+
+.tv-ativo .circulo-numero {
+  width: calc(44px * var(--escala-tv));
+  height: calc(44px * var(--escala-tv));
+  font-size: calc(1.25rem * var(--escala-tv));
+}
+
+.tv-ativo .rotulo-emblema {
+  font-size: calc(0.95rem * var(--escala-tv));
+}
+
+.tv-ativo .nome-tv {
+  font-size: calc(1.1rem * var(--escala-tv));
 }
 
 .enunciado-tv {
-  font-size: clamp(1.45rem, 2.4vw, 2.05rem);
+  font-size: calc(2rem * var(--escala-tv));
   font-weight: 800;
-  line-height: 1.35;
-  margin-bottom: 28px;
+  line-height: 1.28;
+  margin-bottom: calc(20px * var(--escala-tv));
+}
+
+.grade-alternativas-tv {
+  gap: calc(12px * var(--escala-tv));
 }
 
 .alternativa-tv {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 18px 22px;
+  gap: calc(16px * var(--escala-tv));
+  padding: calc(15px * var(--escala-tv)) calc(20px * var(--escala-tv));
   border: 2px solid var(--preto);
   background: var(--fundo-creme);
-  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  font-size: calc(1.3rem * var(--escala-tv));
   font-weight: 600;
+  line-height: 1.28;
 }
 
 .alternativa-tv .letra-alternativa {
-  width: 38px;
-  height: 38px;
+  width: calc(36px * var(--escala-tv));
+  height: calc(36px * var(--escala-tv));
+  font-size: calc(1.05rem * var(--escala-tv));
   border-width: 2px;
 }
 
 .faixa-resultado-tv {
-  margin-top: 24px;
-  padding: 20px 24px;
-  font-size: 1.25rem;
+  margin-top: calc(18px * var(--escala-tv, 1));
+  padding: calc(16px * var(--escala-tv, 1)) calc(20px * var(--escala-tv, 1));
+  font-size: calc(1.2rem * var(--escala-tv, 1));
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
   border-left: 6px solid var(--azul);
   background: var(--fundo-creme);
 }
@@ -822,14 +946,26 @@ body.modo-tv .seletor-modos:hover {
 }
 
 .titulo-lista-tv {
-  font-size: 1.2rem;
-  margin-bottom: 16px;
+  font-size: 1.1rem;
+  margin-bottom: 14px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--cinza-borda);
+  flex-shrink: 0;
 }
 
 .lista-tv {
-  max-height: 620px;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  gap: 8px;
+}
+
+.lista-tv .item-participante {
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .sobreposicao-modal {
@@ -898,4 +1034,7 @@ body.modo-tv .seletor-modos:hover {
   .filete-topo-esquerdo .bloco-amarelo { width: 28px; height: 90px; }
   .filete-base-direito .bloco-azul-horizontal { width: 160px; height: 28px; }
   .filete-base-direito .bloco-azul-vertical { width: 28px; height: 80px; }
+  body.modo-tv .cartao-tv-lateral {
+    display: none;
+  }
 }

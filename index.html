@@ -140,6 +140,19 @@
         <div id="caixa-curiosidade" class="caixa-curiosidade"></div>
         <button id="botao-proximo" class="botao-principal" type="button">PRÓXIMO PARTICIPANTE</button>
       </div>
+
+      <div id="etapa-encerrado" class="cartao oculto">
+        <div class="emblema">
+          <span class="circulo-numero cor-vermelha">!</span>
+          <span id="nome-encerrado" class="rotulo-emblema">PARTICIPANTE</span>
+        </div>
+        <h2 class="titulo-principal">PARTICIPAÇÃO ENCERRADA</h2>
+        <p class="texto-principal texto-destaque">
+          Esta participação foi encerrada pelo apresentador. Obrigado por participar do Desafio Zilda Arns!
+        </p>
+        <p id="contagem-encerrado" class="aviso-contagem">Voltando à tela inicial em 5 segundos...</p>
+        <button id="botao-voltar-inicio-encerrado" class="botao-principal" type="button">VOLTAR AO INÍCIO</button>
+      </div>
     </section>
 
     <section id="visao-apresentador" class="oculto">
@@ -203,7 +216,7 @@
 
     <section id="visao-tv" class="oculto">
       <div class="grade-tv">
-        <div class="cartao">
+        <div class="cartao cartao-tv-principal">
           <div id="tv-espera" class="tv-espera">
             <h1 class="titulo-tv">DESAFIO ZILDA ARNS</h1>
             <p class="subtitulo-tv">
@@ -211,7 +224,21 @@
             </p>
           </div>
 
-          <div id="tv-ativo" class="oculto">
+          <div id="tv-encerrado" class="tv-encerrado oculto">
+            <div class="emblema">
+              <span class="circulo-numero cor-vermelha">!</span>
+              <span class="rotulo-emblema">AVISO</span>
+            </div>
+            <h1 class="titulo-tv">PARTICIPAÇÃO ENCERRADA</h1>
+            <p id="tv-mensagem-encerrado" class="subtitulo-tv">
+              A participação foi encerrada pelo apresentador.
+            </p>
+            <div class="faixa-resultado-tv erro">
+              ✕ RODADA ENCERRADA — AGUARDANDO O PRÓXIMO PARTICIPANTE
+            </div>
+          </div>
+
+          <div id="tv-ativo" class="tv-ativo oculto">
             <div class="cabecalho-pergunta">
               <div class="emblema">
                 <span id="tv-numero-pergunta" class="circulo-numero cor-verde">1</span>
@@ -223,12 +250,12 @@
             </div>
 
             <h2 id="tv-enunciado" class="enunciado-tv"></h2>
-            <div id="tv-alternativas" class="grade-alternativas"></div>
+            <div id="tv-alternativas" class="grade-alternativas grade-alternativas-tv"></div>
             <div id="tv-faixa-resultado" class="faixa-resultado-tv oculto"></div>
           </div>
         </div>
 
-        <aside class="cartao">
+        <aside class="cartao cartao-tv-lateral">
           <h2 class="titulo-lista titulo-lista-tv">PARTICIPANTES</h2>
           <ul id="lista-tv" class="lista-participantes lista-tv">
             <li class="item-vazio">Conectando...</li>
@@ -287,7 +314,7 @@
         <span id="titulo-modal-encerrar" class="rotulo-emblema">ENCERRAR PARTICIPAÇÃO</span>
       </div>
       <p class="aviso-modal">Deseja encerrar a participação atual?</p>
-      <p class="subtexto-modal">A tela do visitante, o painel do apresentador e a TV voltarão para o início.</p>
+      <p class="subtexto-modal">O visitante e a TV receberão o aviso de encerramento e voltarão para o início.</p>
       <div class="acoes-modal">
         <button id="botao-cancelar-encerrar" class="botao-secundario" type="button">CANCELAR</button>
         <button id="botao-confirmar-encerrar" class="botao-principal botao-perigo" type="button">ENCERRAR</button>
