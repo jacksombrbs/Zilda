@@ -1,5 +1,5 @@
-const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbxH5-y7ZzMH8VK-WSalSWPIqDd9nbn0kwGujZxEKu12Vpp4M2ODtdQhquD58FVxmNiCNw/exec";
-const URL_FIREBASE = "https://zilda-9776b-default-rtdb.firebaseio.com/";
+const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbxdtnT5iRd_g0y0ay23bJVwMeZRdyxM3P4YEISn10OPve1q1LbPC-CRYSgb5TW5A15EAQ/exec";
+const URL_FIREBASE = "COLE_AQUI_SUA_URL_DO_FIREBASE";
 const SENHA_MODOS = "2026";
 
 const ESTADO_PADRAO = {
@@ -16,6 +16,7 @@ let bancoPerguntas = [];
 let filasSorteio = { 1: [], 2: [] };
 let modoAtual = "participante";
 let modoSolicitado = null;
+let alternativaSelecionada = "";
 
 let bancoFirebase = null;
 let refEstado = null;
@@ -36,6 +37,7 @@ let estadoJogo = {
 
 document.addEventListener("DOMContentLoaded", async () => {
   configurarEventos();
+  garantirElementosExtras();
   inicializarFirebase();
 
   const parametros = new URLSearchParams(window.location.search);
@@ -48,6 +50,36 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await carregarPerguntas();
 });
+
+function garantirElementosExtras() {
+  // 1) Botão de confirmar resposta no modo Participante
+  const listaAlternativas = document.getElementById("lista-alternativas");
+  if (listaAlternativas && !document.getElementById("botao-confirmar-resposta")) {
+    const areaConfirmar = document.createElement("div");
+    areaConfirmar.id = "area-confirmar-resposta";
+    areaConfirmar.className = "area-confirmar-resposta";
+    areaConfirmar.innerHTML = `
+      <button type="button" id="botao-confirmar-resposta" class="botao-confirmar-resposta" disabled>
+        SELECIONE UMA ALTERNATIVA
+      </button>
+    `;
+    listaAlternativas.insertAdjacentElement("afterend", areaConfirmar);
+
+    document.getElementById("botao-confirmar-resposta").addEventListener("click", () => {
+      if (!alternativaSelecionada) return;
+      responderAlternativa(alternativaSelecionada);
+    });
+  }
+
+  // 2) Faixa de acerto/erro no modo Apresentador
+  const enunciadoApresentador = document.getElementById("apresentador-enunciado");
+  if (enunciadoApresentador && !document.getElementById("apresentador-feedback-resposta")) {
+    const banner = document.createElement("div");
+    banner.id = "apresentador-feedback-resposta";
+    banner.className = "feedback-apresentador oculto";
+    enunciadoApresentador.insertAdjacentElement("beforebegin", banner);
+  }
+}
 
 function inicializarFirebase() {
   if (!URL_FIREBASE || URL_FIREBASE.includes("COLE_AQUI") || typeof firebase === "undefined") {
@@ -175,7 +207,6 @@ function conectarPaineisTempoReal() {
   if (ouvintesAtivos) return;
   ouvintesAtivos = true;
 
-  // Monitora conexão em tempo real
   refConexao.on("value", (snapshot) => {
     if (snapshot.val() === true) {
       status.textContent = "CONECTADO";
@@ -186,14 +217,12 @@ function conectarPaineisTempoReal() {
     }
   });
 
-  // Recebe qualquer mudança do Participante instantaneamente
   refEstado.on("value", (snapshot) => {
     ultimoEstadoRecebido = snapshot.val() || ESTADO_PADRAO;
     atualizarApresentador(ultimoEstadoRecebido);
     atualizarTv(ultimoEstadoRecebido);
   });
 
-  // Recebe o histórico de participantes instantaneamente
   refHistorico.limitToLast(25).on("value", (snapshot) => {
     const lista = [];
     snapshot.forEach((filho) => {
@@ -251,7 +280,6 @@ async function carregarPerguntas() {
       aviso.classList.add("oculto");
       botaoIniciar.disabled = false;
 
-      // Se o Firebase já entregou o estado antes das perguntas terminarem de baixar, atualiza a tela agora
       if (ultimoEstadoRecebido) {
         atualizarApresentador(ultimoEstadoRecebido);
         atualizarTv(ultimoEstadoRecebido);
@@ -355,6 +383,7 @@ function iniciarRodada(nome) {
 
 function exibirPergunta() {
   exibirEtapa("etapa-pergunta");
+  alternativaSelecionada = "";
 
   const pergunta = estadoJogo.perguntaAtual;
   const ehPrimeira = estadoJogo.nivel === 1;
@@ -376,9 +405,31 @@ function exibirPergunta() {
     botao.className = "botao-alternativa";
     botao.dataset.letra = opcao.letra;
     botao.innerHTML = `<span class="letra-alternativa">${opcao.letra}</span><span>${opcao.texto.toUpperCase()}</span>`;
-    botao.addEventListener("click", () => responderAlternativa(opcao.letra));
+    botao.addEventListener("click", () => selecionarAlternativa(opcao.letra));
     container.appendChild(botao);
   });
+
+  const botaoConfirmar = document.getElementById("botao-confirmar-resposta");
+  if (botaoConfirmar) {
+    botaoConfirmar.disabled = true;
+    botaoConfirmar.classList.remove("pronto");
+    botaoConfirmar.textContent = "SELECIONE UMA ALTERNATIVA";
+  }
+}
+
+function selecionarAlternativa(letra) {
+  alternativaSelecionada = letra;
+
+  document.querySelectorAll("#lista-alternativas .botao-alternativa").forEach((botao) => {
+    botao.classList.toggle("selecionada", botao.dataset.letra === letra);
+  });
+
+  const botaoConfirmar = document.getElementById("botao-confirmar-resposta");
+  if (botaoConfirmar) {
+    botaoConfirmar.disabled = false;
+    botaoConfirmar.classList.add("pronto");
+    botaoConfirmar.textContent = `CONFIRMAR RESPOSTA (LETRA ${letra})`;
+  }
 }
 
 function responderAlternativa(letraEscolhida) {
@@ -388,8 +439,16 @@ function responderAlternativa(letraEscolhida) {
   estadoJogo.respostaEscolhida = letraEscolhida;
   estadoJogo.acertou = acertou;
 
+  const botaoConfirmar = document.getElementById("botao-confirmar-resposta");
+  if (botaoConfirmar) {
+    botaoConfirmar.disabled = true;
+    botaoConfirmar.classList.remove("pronto");
+    botaoConfirmar.textContent = acertou ? "RESPOSTA CORRETA!" : "RESPOSTA ENVIADA";
+  }
+
   document.querySelectorAll("#lista-alternativas .botao-alternativa").forEach((botao) => {
     botao.disabled = true;
+    botao.classList.remove("selecionada");
     if (botao.dataset.letra === correta) {
       botao.classList.add("correta");
     } else if (botao.dataset.letra === letraEscolhida && !acertou) {
@@ -505,13 +564,11 @@ function encerrarRodada({
     ajuda_utilizada: ""
   };
 
-  // 1) Atualiza TV e Apresentador instantaneamente via Firebase
   enviarEstadoAtual();
   if (refHistorico) {
     refHistorico.push(registroHistorico);
   }
 
-  // 2) Salva backup na Planilha em segundo plano (sem travar nada)
   enviarParaPlanilhaEmSegundoPlano({
     acao: "registrar_historico",
     ...registroHistorico
@@ -520,6 +577,7 @@ function encerrarRodada({
 
 function reiniciarParaInicio() {
   document.getElementById("campo-nome").value = "";
+  alternativaSelecionada = "";
   estadoJogo = {
     participante: "AGUARDANDO PARTICIPANTE...",
     etapa: "INICIO",
@@ -541,13 +599,13 @@ function exibirEtapa(idVisivel) {
 
 function nomearEtapa(etapa) {
   const mapa = {
-    INICIO: "INÍCIO",
-    PERGUNTA_1: "PERGUNTA 1",
-    DECISAO_PARAR: "ACERTOU A 1 — DECISÃO",
-    PERGUNTA_2: "PERGUNTA 2",
-    RESULTADO: "FIM DA RODADA"
+    INICIO: "AGUARDANDO PARTICIPANTE",
+    PERGUNTA_1: "RESPONDENDO A 1ª PERGUNTA",
+    DECISAO_PARAR: "ESCOLHENDO: PARAR OU ARRISCAR A 2ª PERGUNTA",
+    PERGUNTA_2: "RESPONDENDO A 2ª PERGUNTA (VALE O DOBRO)",
+    RESULTADO: "RODADA ENCERRADA"
   };
-  return mapa[etapa] || etapa || "INÍCIO";
+  return mapa[etapa] || etapa || "AGUARDANDO PARTICIPANTE";
 }
 
 function atualizarApresentador(estado) {
@@ -560,6 +618,7 @@ function atualizarApresentador(estado) {
   const alternativas = document.getElementById("apresentador-alternativas");
   const gabarito = document.getElementById("apresentador-gabarito");
   const comentario = document.getElementById("apresentador-comentario");
+  const banner = document.getElementById("apresentador-feedback-resposta");
 
   if (!pergunta || estado.etapa === "INICIO") {
     document.getElementById("apresentador-rotulo-pergunta").textContent = "PERGUNTA SORTEADA";
@@ -567,6 +626,10 @@ function atualizarApresentador(estado) {
     alternativas.innerHTML = "";
     gabarito.textContent = "—";
     comentario.textContent = "Aguardando o participante iniciar o desafio.";
+    if (banner) {
+      banner.className = "feedback-apresentador oculto";
+      banner.textContent = "";
+    }
     return;
   }
 
@@ -575,14 +638,54 @@ function atualizarApresentador(estado) {
   enunciado.textContent = pergunta.pergunta;
 
   const correta = pergunta.correta.toUpperCase();
+  const escolhida = (estado.resposta_escolhida || "").toUpperCase();
   gabarito.textContent = `LETRA ${correta}`;
   comentario.textContent = pergunta.comentario_apresentador;
 
+  if (banner) {
+    if (estado.etapa === "DECISAO_PARAR") {
+      banner.className = "feedback-apresentador decisao";
+      banner.textContent = "✓ ACERTOU A 1ª PERGUNTA! Está decidindo se para com o prêmio garantido ou arrisca a 2ª pergunta.";
+    } else if (estado.etapa === "RESULTADO") {
+      if (estado.acertou === "NAO") {
+        banner.className = "feedback-apresentador errou";
+        banner.textContent = `✕ ERROU! Escolheu a letra ${escolhida} — A correta era a letra ${correta}.`;
+      } else if ((estado.premio_atual || "").toUpperCase().includes("DOBRO")) {
+        banner.className = "feedback-apresentador acertou";
+        banner.textContent = "★ ACERTOU AS 2 PERGUNTAS! PRÊMIO EM DOBRO!";
+      } else {
+        banner.className = "feedback-apresentador decisao";
+        banner.textContent = "✓ PAROU NA 1ª PERGUNTA E GARANTIU O PRÊMIO!";
+      }
+    } else if (estado.acertou === "SIM") {
+      banner.className = "feedback-apresentador acertou";
+      banner.textContent = `✓ ACERTOU! Escolheu a letra ${escolhida} (correta).`;
+    } else if (estado.acertou === "NAO") {
+      banner.className = "feedback-apresentador errou";
+      banner.textContent = `✕ ERROU! Escolheu a letra ${escolhida} — A correta é a letra ${correta}.`;
+    } else {
+      banner.className = "feedback-apresentador oculto";
+      banner.textContent = "";
+    }
+  }
+
   alternativas.innerHTML = listarAlternativas(pergunta)
     .map((item) => {
-      const classe = item.letra === correta ? "gabarito" : "";
-      const marcacao = estado.resposta_escolhida === item.letra ? " ← ESCOLHIDA" : "";
-      return `<div class="item-alternativa-apresentador ${classe}"><strong>${item.letra})</strong> ${item.texto}${marcacao}</div>`;
+      const classes = ["item-alternativa-apresentador"];
+      if (item.letra === correta) classes.push("gabarito");
+
+      let marcacao = "";
+      if (escolhida === item.letra) {
+        if (item.letra === correta) {
+          classes.push("escolhida-correta");
+          marcacao = " ← ESCOLHEU (ACERTOU ✓)";
+        } else {
+          classes.push("escolhida-errada");
+          marcacao = " ← ESCOLHEU (ERROU ✕)";
+        }
+      }
+
+      return `<div class="${classes.join(" ")}"><strong>${item.letra})</strong> ${item.texto}${marcacao}</div>`;
     })
     .join("");
 }
@@ -643,31 +746,35 @@ function atualizarTv(estado) {
   }
 }
 
+function renderizarItensHistorico(lista) {
+  if (!lista || lista.length === 0) {
+    return `<li class="item-vazio">Nenhum participante finalizado ainda.</li>`;
+  }
+
+  return lista
+    .map((item) => {
+      const resultado = (item.resultado_final || "").toUpperCase();
+      let classe = "";
+      if (resultado.includes("2 PERGUNTAS") || resultado.includes("DOBRO")) classe = "dobrou";
+      else if (resultado.includes("NÃO")) classe = "errou";
+
+      const premio = item.premio && item.premio !== "PARTICIPOU"
+        ? ` — <strong>${item.premio}</strong>`
+        : "";
+
+      return `
+        <li class="item-participante ${classe}">
+          <div class="topo-item-participante">
+            <span>${item.participante}</span>
+          </div>
+          <div>${item.resultado_final}${premio}</div>
+        </li>
+      `;
+    })
+    .join("");
+}
+
 function atualizarListas(lista) {
-  const html = !lista || lista.length === 0
-    ? `<li class="item-vazio">Nenhum participante finalizado ainda.</li>`
-    : lista
-        .map((item) => {
-          const resultado = (item.resultado_final || "").toUpperCase();
-          let classe = "";
-          if (resultado.includes("2 PERGUNTAS") || resultado.includes("DOBRO")) classe = "dobrou";
-          else if (resultado.includes("NÃO")) classe = "errou";
-
-          const premio = item.premio && item.premio !== "PARTICIPOU"
-            ? ` — <strong>${item.premio}</strong>`
-            : "";
-
-          return `
-            <li class="item-participante ${classe}">
-              <div class="topo-item-participante">
-                <span>${item.participante}</span>
-              </div>
-              <div>${item.resultado_final}${premio}</div>
-            </li>
-          `;
-        })
-        .join("");
-
-  document.getElementById("lista-apresentador").innerHTML = html;
-  document.getElementById("lista-tv").innerHTML = html;
+  document.getElementById("lista-apresentador").innerHTML = renderizarItensHistorico(lista);
+  document.getElementById("lista-tv").innerHTML = renderizarItensHistorico((lista || []).slice(0, 7));
 }
