@@ -1,9 +1,11 @@
-const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbxdtnT5iRd_g0y0ay23bJVwMeZRdyxM3P4YEISn10OPve1q1LbPC-CRYSgb5TW5A15EAQ/exec";
+const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbxH5-y7ZzMH8VK-WSalSWPIqDd9nbn0kwGujZxEKu12Vpp4M2ODtdQhquD58FVxmNiCNw/exec";
 const SENHA_MODOS = "2026";
+const INTERVALO_SINCRONIZACAO_MS = 1200;
 
 let bancoPerguntas = [];
 let filasSorteio = { 1: [], 2: [] };
 let temporizadorAtualizacao = null;
+let sincronizando = false;
 let modoAtual = "participante";
 let modoSolicitado = null;
 
@@ -122,13 +124,29 @@ function ativarModo(modo) {
   });
 
   if (modo === "apresentador" || modo === "tv") {
-    sincronizarPaineis();
-    if (!temporizadorAtualizacao) {
-      temporizadorAtualizacao = setInterval(sincronizarPaineis, 2500);
-    }
-  } else if (temporizadorAtualizacao) {
-    clearInterval(temporizadorAtualizacao);
+    iniciarSincronizacao();
+  } else {
+    pararSincronizacao();
+  }
+}
+
+function iniciarSincronizacao() {
+  pararSincronizacao();
+  cicloSincronizacao();
+}
+
+function pararSincronizacao() {
+  if (temporizadorAtualizacao) {
+    clearTimeout(temporizadorAtualizacao);
     temporizadorAtualizacao = null;
+  }
+}
+
+async function cicloSincronizacao() {
+  if (modoAtual !== "apresentador" && modoAtual !== "tv") return;
+  await sincronizarPaineis();
+  if (modoAtual === "apresentador" || modoAtual === "tv") {
+    temporizadorAtualizacao = setTimeout(cicloSincronizacao, INTERVALO_SINCRONIZACAO_MS);
   }
 }
 
@@ -137,7 +155,7 @@ async function carregarPerguntas() {
   const botaoIniciar = document.getElementById("botao-iniciar");
 
   try {
-    const resposta = await fetch(`${URL_PLANILHA}?acao=perguntas`);
+    const resposta = await fetch(`${URL_PLANILHA}?acao=perguntas`, { cache: "no-store" });
     const dados = await resposta.json();
 
     if (Array.isArray(dados.perguntas) && dados.perguntas.length > 0) {
@@ -159,15 +177,14 @@ async function enviarParaPlanilha(dados) {
     await fetch(URL_PLANILHA, {
       method: "POST",
       mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(dados)
     });
   } catch (erro) {}
 }
 
-function enviarEstadoAtual() {
-  enviarParaPlanilha({
-    acao: "atualizar_estado",
+function montarPayloadEstado() {
+  return {
     participante: estadoJogo.participante,
     etapa: estadoJogo.etapa,
     nivel: String(estadoJogo.nivel),
@@ -175,25 +192,20 @@ function enviarEstadoAtual() {
     resposta_escolhida: estadoJogo.respostaEscolhida,
     acertou: estadoJogo.acertou === null ? "" : (estadoJogo.acertou ? "SIM" : "NAO"),
     premio_atual: estadoJogo.premio
-  });
+  };
 }
 
-function registrarNoHistorico(resultadoFinal, premioFinal, totalPerguntas) {
+function enviarEstadoAtual() {
   enviarParaPlanilha({
-    acao: "registrar_historico",
-    timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-    participante: estadoJogo.participante,
-    resultado_final: resultadoFinal,
-    premio: premioFinal,
-    perguntas_respondidas: String(totalPerguntas),
-    ajuda_utilizada: ""
+    acao: "atualizar_estado",
+    ...montarPayloadEstado()
   });
 }
 
 async function limparListaParticipantes() {
   document.getElementById("modal-limpar").classList.add("oculto");
-  await enviarParaPlanilha({ acao: "limpar_historico" });
   atualizarListas([]);
+  await enviarParaPlanilha({ acao: "limpar_historico" });
 }
 
 function embaralhar(lista) {
@@ -391,8 +403,16 @@ function encerrarRodada({
     estadoJogo.perguntaAtual ? estadoJogo.perguntaAtual.comentario_apresentador : "";
 
   exibirEtapa("etapa-resultado");
-  enviarEstadoAtual();
-  registrarNoHistorico(resultadoHistorico, premioHistorico, totalPerguntas);
+
+  // Envia estado + histórico em um único POST
+  enviarParaPlanilha({
+    acao: "encerrar_rodada",
+    ...montarPayloadEstado(),
+    resultado_final: resultadoHistorico,
+    premio: premioHistorico,
+    perguntas_respondidas: String(totalPerguntas),
+    ajuda_utilizada: ""
+  });
 }
 
 function reiniciarParaInicio() {
@@ -417,6 +437,8 @@ function exibirEtapa(idVisivel) {
 }
 
 async function sincronizarPaineis() {
+  if (sincronizando) return;
+  sincronizando = true;
   const status = document.getElementById("status-conexao");
 
   try {
@@ -424,7 +446,7 @@ async function sincronizarPaineis() {
       await carregarPerguntas();
     }
 
-    const resposta = await fetch(`${URL_PLANILHA}?acao=painel`);
+    const resposta = await fetch(`${URL_PLANILHA}?acao=painel&_=${Date.now()}`, { cache: "no-store" });
     const dados = await resposta.json();
 
     status.textContent = "CONECTADO";
@@ -440,6 +462,8 @@ async function sincronizarPaineis() {
     status.textContent = "SEM CONEXÃO";
     status.classList.add("desconectado");
     exibirListasSemConexao();
+  } finally {
+    sincronizando = false;
   }
 }
 
@@ -565,7 +589,6 @@ function atualizarListas(lista) {
             <li class="item-participante ${classe}">
               <div class="topo-item-participante">
                 <span>${item.participante}</span>
-                <span>${item.timestamp || ""}</span>
               </div>
               <div>${item.resultado_final}${premio}</div>
             </li>
