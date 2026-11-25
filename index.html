@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Desafio Zilda Arns — 2A</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="modo-participante">
+  <div class="filete-topo-esquerdo" aria-hidden="true">
+    <span class="bloco-verde"></span>
+    <span class="bloco-amarelo"></span>
+  </div>
+  <div class="filete-base-direito" aria-hidden="true">
+    <span class="bloco-azul-vertical"></span>
+    <span class="bloco-azul-horizontal"></span>
+  </div>
+
+  <header class="cabecalho">
+    <div class="marca" role="img" aria-label="Logo Zilda Arns 2A">
+      <svg class="logo-svg" viewBox="0 0 260 220" xmlns="http://www.w3.org/2000/svg">
+        <text x="130" y="44" text-anchor="middle" font-family="Montserrat, sans-serif" font-weight="900" font-size="48" letter-spacing="4" fill="#161616">ZILDA</text>
+        <text x="130" y="92" text-anchor="middle" font-family="Montserrat, sans-serif" font-weight="900" font-size="48" letter-spacing="5" fill="#161616">ARNS</text>
+        <rect x="24" y="106" width="66" height="9" fill="#F3DF18"/>
+        <rect x="90" y="106" width="66" height="9" fill="#55B828"/>
+        <rect x="156" y="106" width="66" height="9" fill="#0D4698"/>
+        <circle cx="233" cy="110.5" r="5" fill="#E62525"/>
+        <text x="130" y="205" text-anchor="middle" font-family="Montserrat, sans-serif" font-weight="200" font-size="108" letter-spacing="10" fill="#161616">2A</text>
+      </svg>
+    </div>
+
+    <nav class="seletor-modos" aria-label="Alternar modo de visualização">
+      <button id="botao-modo-participante" class="botao-icone ativo" type="button" title="Modo Participante" aria-label="Modo Participante">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4"></circle>
+          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path>
+        </svg>
+      </button>
+      <button id="botao-modo-apresentador" class="botao-icone" type="button" title="Modo Apresentador" aria-label="Modo Apresentador">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="3" width="16" height="18" rx="1"></rect>
+          <line x1="8" y1="8" x2="16" y2="8"></line>
+          <line x1="8" y1="12" x2="16" y2="12"></line>
+          <line x1="8" y1="16" x2="12" y2="16"></line>
+        </svg>
+      </button>
+      <button id="botao-modo-tv" class="botao-icone" type="button" title="Modo TV" aria-label="Modo TV">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="20" height="13" rx="1"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+      </button>
+    </nav>
+  </header>
+
+  <main class="conteudo">
+    <section id="visao-participante">
+      <div id="etapa-inicio" class="cartao">
+        <h1 class="titulo-principal">DESAFIO ZILDA ARNS</h1>
+        <p class="texto-principal texto-destaque">
+          Responda a duas perguntas sobre a Dra. Zilda Arns e garanta o seu prêmio!
+        </p>
+
+        <p id="aviso-conexao-inicio" class="aviso-erro oculto">
+          Não foi possível conectar à planilha. Verifique a internet e recarregue a página.
+        </p>
+
+        <form id="formulario-inicio" class="formulario-inicio">
+          <label for="campo-nome" class="rotulo-campo">NOME DO PARTICIPANTE</label>
+          <input
+            type="text"
+            id="campo-nome"
+            class="campo-texto"
+            placeholder="DIGITE SEU NOME..."
+            maxlength="28"
+            required
+            autocomplete="off"
+          />
+          <button id="botao-iniciar" type="submit" class="botao-principal">INICIAR DESAFIO</button>
+        </form>
+      </div>
+
+      <div id="etapa-pergunta" class="cartao oculto">
+        <div class="cabecalho-pergunta">
+          <div class="emblema">
+            <span id="numero-pergunta" class="circulo-numero cor-verde">1</span>
+            <span id="titulo-pergunta" class="rotulo-emblema">PERGUNTA 1</span>
+          </div>
+          <div class="nome-jogador">
+            <span id="nome-participante">PARTICIPANTE</span>
+          </div>
+        </div>
+
+        <h2 id="enunciado-pergunta" class="enunciado"></h2>
+
+        <div id="lista-alternativas" class="grade-alternativas"></div>
+      </div>
+
+      <div id="etapa-decisao" class="cartao oculto">
+        <div class="emblema">
+          <span class="circulo-numero cor-verde">✓</span>
+          <span id="nome-decisao" class="rotulo-emblema">PARTICIPANTE</span>
+        </div>
+        <h2 class="titulo-principal">VOCÊ ACERTOU!</h2>
+        <p class="texto-principal texto-destaque">
+          Se desafie e vá para uma nova pergunta: acerte e dobre seu prêmio, ou pare agora e garanta o que já ganhou.
+        </p>
+        <div class="grupo-decisao">
+          <button id="botao-parar" class="botao-secundario" type="button">PARAR E GARANTIR PRÊMIO</button>
+          <button id="botao-avancar" class="botao-principal" type="button">IR PARA A PERGUNTA 2</button>
+        </div>
+      </div>
+
+      <div id="etapa-resultado" class="cartao oculto">
+        <div class="emblema">
+          <span id="icone-resultado" class="circulo-numero cor-azul">✓</span>
+          <span id="nome-resultado" class="rotulo-emblema">PARTICIPANTE</span>
+        </div>
+        <h2 id="titulo-resultado" class="titulo-principal"></h2>
+        <p id="mensagem-resultado" class="texto-principal"></p>
+
+        <div id="caixa-resposta-correta" class="caixa-resposta-correta oculto">
+          <span class="rotulo-resposta-correta">RESPOSTA CORRETA</span>
+          <div class="conteudo-resposta-correta">
+            <span id="letra-resposta-correta" class="emblema-letra-grande"></span>
+            <span id="texto-resposta-correta" class="texto-resposta-grande"></span>
+          </div>
+        </div>
+
+        <div id="caixa-curiosidade" class="caixa-curiosidade"></div>
+        <button id="botao-proximo" class="botao-principal" type="button">PRÓXIMO PARTICIPANTE</button>
+      </div>
+    </section>
+
+    <section id="visao-apresentador" class="oculto">
+      <div class="grade-apresentador">
+        <div class="cartao">
+          <div class="cabecalho-ao-vivo">
+            <span class="indicador-ao-vivo"><span class="ponto-vermelho"></span> AO VIVO NA SALA</span>
+            <span id="status-conexao" class="status-conexao">CONECTANDO...</span>
+          </div>
+
+          <div class="bloco-estado">
+            <div>
+              <span class="rotulo-pequeno">PARTICIPANTE ATUAL</span>
+              <strong id="apresentador-participante" class="valor-destaque">AGUARDANDO PARTICIPANTE...</strong>
+            </div>
+            <div>
+              <span class="rotulo-pequeno">ETAPA</span>
+              <strong id="apresentador-etapa" class="valor-destaque">INÍCIO</strong>
+            </div>
+          </div>
+
+          <div class="bloco-pergunta-apresentador">
+            <span id="apresentador-rotulo-pergunta" class="rotulo-pequeno">PERGUNTA SORTEADA</span>
+            <h3 id="apresentador-enunciado" class="enunciado-apresentador">Nenhuma pergunta sorteada no momento.</h3>
+            <div id="apresentador-alternativas" class="lista-resumo-alternativas"></div>
+          </div>
+
+          <div class="caixa-cola">
+            <div class="cabecalho-cola">
+              <span>GABARITO &amp; COMENTÁRIO PARA O APRESENTADOR</span>
+              <strong id="apresentador-gabarito" class="etiqueta-gabarito">—</strong>
+            </div>
+            <p id="apresentador-comentario" class="texto-cola">
+              Quando o participante iniciar a rodada, a resposta correta e o contexto histórico aparecerão aqui automaticamente.
+            </p>
+          </div>
+        </div>
+
+        <aside class="cartao">
+          <div class="cabecalho-lista">
+            <h2 class="titulo-lista">PARTICIPANTES</h2>
+            <div class="acoes-lista">
+              <button id="botao-atualizar-lista" class="botao-pequeno" type="button">ATUALIZAR</button>
+              <button id="botao-limpar-lista" class="botao-pequeno botao-pequeno-perigo" type="button">LIMPAR LISTA</button>
+            </div>
+          </div>
+          <p class="subtitulo-lista">REGISTRO EM TEMPO REAL — TURMA 2A</p>
+
+          <ul id="lista-apresentador" class="lista-participantes">
+            <li class="item-vazio">Conectando à planilha...</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <section id="visao-tv" class="oculto">
+      <div class="grade-tv">
+        <div class="cartao">
+          <div id="tv-espera" class="tv-espera">
+            <h1 class="titulo-tv">DESAFIO ZILDA ARNS</h1>
+            <p class="subtitulo-tv">
+              Responda a duas perguntas sobre a Dra. Zilda Arns e garanta o seu prêmio!
+            </p>
+          </div>
+
+          <div id="tv-ativo" class="oculto">
+            <div class="cabecalho-pergunta">
+              <div class="emblema">
+                <span id="tv-numero-pergunta" class="circulo-numero cor-verde">1</span>
+                <span id="tv-titulo-pergunta" class="rotulo-emblema">PERGUNTA 1</span>
+              </div>
+              <div class="nome-jogador nome-tv">
+                <span id="tv-participante"></span>
+              </div>
+            </div>
+
+            <h2 id="tv-enunciado" class="enunciado-tv"></h2>
+            <div id="tv-alternativas" class="grade-alternativas"></div>
+            <div id="tv-faixa-resultado" class="faixa-resultado-tv oculto"></div>
+          </div>
+        </div>
+
+        <aside class="cartao">
+          <h2 class="titulo-lista titulo-lista-tv">PARTICIPANTES</h2>
+          <ul id="lista-tv" class="lista-participantes lista-tv">
+            <li class="item-vazio">Conectando à planilha...</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-senha" class="sobreposicao-modal oculto" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-senha">
+    <div class="caixa-modal">
+      <div class="emblema">
+        <span class="circulo-numero cor-vermelha">!</span>
+        <span id="titulo-modal-senha" class="rotulo-emblema">ACESSO RESTRITO</span>
+      </div>
+      <p class="aviso-modal">Atenção: o participante não deve sair desta tela.</p>
+      <p id="texto-destino-modo" class="subtexto-modal">Digite a senha para alternar o modo:</p>
+
+      <form id="formulario-senha" class="formulario-modal">
+        <input
+          type="password"
+          id="campo-senha"
+          class="campo-texto"
+          placeholder="SENHA"
+          autocomplete="off"
+          required
+        />
+        <p id="erro-senha" class="aviso-erro oculto">Senha incorreta. Tente novamente.</p>
+        <div class="acoes-modal">
+          <button id="botao-cancelar-senha" class="botao-secundario" type="button">CANCELAR</button>
+          <button type="submit" class="botao-principal">ENTRAR</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-limpar" class="sobreposicao-modal oculto" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-limpar">
+    <div class="caixa-modal">
+      <div class="emblema">
+        <span class="circulo-numero cor-vermelha">!</span>
+        <span id="titulo-modal-limpar" class="rotulo-emblema">CONFIRMAR EXCLUSÃO</span>
+      </div>
+      <p class="aviso-modal">Deseja limpar toda a lista de participantes?</p>
+      <p class="subtexto-modal">Esta ação removerá o histórico na planilha, no painel e na TV.</p>
+      <div class="acoes-modal">
+        <button id="botao-cancelar-limpar" class="botao-secundario" type="button">CANCELAR</button>
+        <button id="botao-confirmar-limpar" class="botao-principal botao-perigo" type="button">LIMPAR TUDO</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
