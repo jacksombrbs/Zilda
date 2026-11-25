@@ -66,7 +66,7 @@
         </p>
 
         <p id="aviso-conexao-inicio" class="aviso-erro oculto">
-          Não foi possível conectar à planilha. Verifique a internet e recarregue a página.
+          Não foi possível carregar as perguntas. Verifique a internet e recarregue a página.
         </p>
 
         <form id="formulario-inicio" class="formulario-inicio">
@@ -98,6 +98,12 @@
         <h2 id="enunciado-pergunta" class="enunciado"></h2>
 
         <div id="lista-alternativas" class="grade-alternativas"></div>
+
+        <div class="area-confirmar-resposta">
+          <button id="botao-confirmar-resposta" type="button" class="botao-principal botao-confirmar-resposta" disabled>
+            SELECIONE UMA ALTERNATIVA
+          </button>
+        </div>
       </div>
 
       <div id="etapa-decisao" class="cartao oculto">
@@ -141,7 +147,12 @@
         <div class="cartao">
           <div class="cabecalho-ao-vivo">
             <span class="indicador-ao-vivo"><span class="ponto-vermelho"></span> AO VIVO NA SALA</span>
-            <span id="status-conexao" class="status-conexao">CONECTANDO...</span>
+            <div class="acoes-ao-vivo">
+              <span id="status-conexao" class="status-conexao">CONECTANDO...</span>
+              <button id="botao-encerrar-participacao" class="botao-pequeno botao-pequeno-perigo" type="button" disabled>
+                ENCERRAR PARTICIPAÇÃO
+              </button>
+            </div>
           </div>
 
           <div class="bloco-estado">
@@ -151,13 +162,14 @@
             </div>
             <div>
               <span class="rotulo-pequeno">ETAPA</span>
-              <strong id="apresentador-etapa" class="valor-destaque">INÍCIO</strong>
+              <strong id="apresentador-etapa" class="valor-destaque">AGUARDANDO PARTICIPANTE</strong>
             </div>
           </div>
 
           <div class="bloco-pergunta-apresentador">
             <span id="apresentador-rotulo-pergunta" class="rotulo-pequeno">PERGUNTA SORTEADA</span>
-            <h3 id="apresentador-enunciado" class="enunciado-apresentador">Nenhuma pergunta sorteada no momento.</h3>
+            <div id="apresentador-feedback-resposta" class="feedback-apresentador oculto"></div>
+            <h3 id="apresentador-enunciado" class="enunciado-apresentador">Nenhuma pergunta ativa no momento.</h3>
             <div id="apresentador-alternativas" class="lista-resumo-alternativas"></div>
           </div>
 
@@ -167,7 +179,7 @@
               <strong id="apresentador-gabarito" class="etiqueta-gabarito">—</strong>
             </div>
             <p id="apresentador-comentario" class="texto-cola">
-              Quando o participante iniciar a rodada, a resposta correta e o contexto histórico aparecerão aqui automaticamente.
+              Aguardando o participante iniciar o desafio.
             </p>
           </div>
         </div>
@@ -183,7 +195,7 @@
           <p class="subtitulo-lista">REGISTRO EM TEMPO REAL — TURMA 2A</p>
 
           <ul id="lista-apresentador" class="lista-participantes">
-            <li class="item-vazio">Conectando à planilha...</li>
+            <li class="item-vazio">Conectando...</li>
           </ul>
         </aside>
       </div>
@@ -219,7 +231,7 @@
         <aside class="cartao">
           <h2 class="titulo-lista titulo-lista-tv">PARTICIPANTES</h2>
           <ul id="lista-tv" class="lista-participantes lista-tv">
-            <li class="item-vazio">Conectando à planilha...</li>
+            <li class="item-vazio">Conectando...</li>
           </ul>
         </aside>
       </div>
@@ -264,6 +276,21 @@
       <div class="acoes-modal">
         <button id="botao-cancelar-limpar" class="botao-secundario" type="button">CANCELAR</button>
         <button id="botao-confirmar-limpar" class="botao-principal botao-perigo" type="button">LIMPAR TUDO</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-encerrar" class="sobreposicao-modal oculto" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-encerrar">
+    <div class="caixa-modal">
+      <div class="emblema">
+        <span class="circulo-numero cor-vermelha">!</span>
+        <span id="titulo-modal-encerrar" class="rotulo-emblema">ENCERRAR PARTICIPAÇÃO</span>
+      </div>
+      <p class="aviso-modal">Deseja encerrar a participação atual?</p>
+      <p class="subtexto-modal">A tela do visitante, o painel do apresentador e a TV voltarão para o início.</p>
+      <div class="acoes-modal">
+        <button id="botao-cancelar-encerrar" class="botao-secundario" type="button">CANCELAR</button>
+        <button id="botao-confirmar-encerrar" class="botao-principal botao-perigo" type="button">ENCERRAR</button>
       </div>
     </div>
   </div>

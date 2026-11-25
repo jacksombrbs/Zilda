@@ -17,12 +17,15 @@ let filasSorteio = { 1: [], 2: [] };
 let modoAtual = "participante";
 let modoSolicitado = null;
 let alternativaSelecionada = "";
+let temporizadorResposta = null;
 
 let bancoFirebase = null;
 let refEstado = null;
 let refHistorico = null;
+let refEncerrar = null;
 let refConexao = null;
 let ouvintesAtivos = false;
+let primeiroEventoEncerrar = true;
 let ultimoEstadoRecebido = null;
 
 let estadoJogo = {
@@ -37,7 +40,6 @@ let estadoJogo = {
 
 document.addEventListener("DOMContentLoaded", async () => {
   configurarEventos();
-  garantirElementosExtras();
   inicializarFirebase();
 
   const parametros = new URLSearchParams(window.location.search);
@@ -51,38 +53,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   await carregarPerguntas();
 });
 
-function garantirElementosExtras() {
-  // 1) Botão de confirmar resposta no modo Participante
-  const listaAlternativas = document.getElementById("lista-alternativas");
-  if (listaAlternativas && !document.getElementById("botao-confirmar-resposta")) {
-    const areaConfirmar = document.createElement("div");
-    areaConfirmar.id = "area-confirmar-resposta";
-    areaConfirmar.className = "area-confirmar-resposta";
-    areaConfirmar.innerHTML = `
-      <button type="button" id="botao-confirmar-resposta" class="botao-confirmar-resposta" disabled>
-        SELECIONE UMA ALTERNATIVA
-      </button>
-    `;
-    listaAlternativas.insertAdjacentElement("afterend", areaConfirmar);
-
-    document.getElementById("botao-confirmar-resposta").addEventListener("click", () => {
-      if (!alternativaSelecionada) return;
-      responderAlternativa(alternativaSelecionada);
-    });
-  }
-
-  // 2) Faixa de acerto/erro no modo Apresentador
-  const enunciadoApresentador = document.getElementById("apresentador-enunciado");
-  if (enunciadoApresentador && !document.getElementById("apresentador-feedback-resposta")) {
-    const banner = document.createElement("div");
-    banner.id = "apresentador-feedback-resposta";
-    banner.className = "feedback-apresentador oculto";
-    enunciadoApresentador.insertAdjacentElement("beforebegin", banner);
-  }
-}
-
 function inicializarFirebase() {
-  if (!URL_FIREBASE || URL_FIREBASE.includes("COLE_AQUI") || typeof firebase === "undefined") {
+  if (!URL_FIREBASE || typeof firebase === "undefined") {
     return false;
   }
 
@@ -93,7 +65,19 @@ function inicializarFirebase() {
   bancoFirebase = firebase.database();
   refEstado = bancoFirebase.ref("desafio_zilda/estado");
   refHistorico = bancoFirebase.ref("desafio_zilda/historico");
+  refEncerrar = bancoFirebase.ref("desafio_zilda/comando_encerrar");
   refConexao = bancoFirebase.ref(".info/connected");
+
+  refEncerrar.on("value", () => {
+    if (primeiroEventoEncerrar) {
+      primeiroEventoEncerrar = false;
+      return;
+    }
+    if (modoAtual === "participante" && estadoJogo.etapa !== "INICIO") {
+      limparEstadoLocalParticipante();
+    }
+  });
+
   return true;
 }
 
@@ -124,11 +108,17 @@ function configurarEventos() {
     iniciarRodada(nome);
   });
 
+  document.getElementById("botao-confirmar-resposta").addEventListener("click", () => {
+    if (!alternativaSelecionada || estadoJogo.respostaEscolhida) return;
+    responderAlternativa(alternativaSelecionada);
+  });
+
   document.getElementById("botao-parar").addEventListener("click", pararNaPrimeiraPergunta);
   document.getElementById("botao-avancar").addEventListener("click", avancarParaSegundaPergunta);
   document.getElementById("botao-proximo").addEventListener("click", reiniciarParaInicio);
 
   document.getElementById("botao-atualizar-lista").addEventListener("click", recarregarManual);
+
   document.getElementById("botao-limpar-lista").addEventListener("click", () => {
     document.getElementById("modal-limpar").classList.remove("oculto");
   });
@@ -136,6 +126,14 @@ function configurarEventos() {
     document.getElementById("modal-limpar").classList.add("oculto");
   });
   document.getElementById("botao-confirmar-limpar").addEventListener("click", limparListaParticipantes);
+
+  document.getElementById("botao-encerrar-participacao").addEventListener("click", () => {
+    document.getElementById("modal-encerrar").classList.remove("oculto");
+  });
+  document.getElementById("botao-cancelar-encerrar").addEventListener("click", () => {
+    document.getElementById("modal-encerrar").classList.add("oculto");
+  });
+  document.getElementById("botao-confirmar-encerrar").addEventListener("click", encerrarParticipacaoAtual);
 }
 
 function solicitarTrocaModo(destino) {
@@ -329,6 +327,17 @@ function limparListaParticipantes() {
   enviarParaPlanilhaEmSegundoPlano({ acao: "limpar_historico" });
 }
 
+function encerrarParticipacaoAtual() {
+  document.getElementById("modal-encerrar").classList.add("oculto");
+  limparEstadoLocalParticipante();
+  if (refEstado) {
+    refEstado.set({ ...ESTADO_PADRAO });
+  }
+  if (refEncerrar) {
+    refEncerrar.set(Date.now());
+  }
+}
+
 function embaralhar(lista) {
   const copia = [...lista];
   for (let i = copia.length - 1; i > 0; i--) {
@@ -351,21 +360,27 @@ function sortearPergunta(nivel) {
 
 function listarAlternativas(pergunta) {
   return [
-    { letra: "A", texto: pergunta.alt_a },
-    { letra: "B", texto: pergunta.alt_b },
-    { letra: "C", texto: pergunta.alt_c },
-    { letra: "D", texto: pergunta.alt_d }
+    { letra: "A", texto: String(pergunta.alt_a ?? "") },
+    { letra: "B", texto: String(pergunta.alt_b ?? "") },
+    { letra: "C", texto: String(pergunta.alt_c ?? "") },
+    { letra: "D", texto: String(pergunta.alt_d ?? "") }
   ];
 }
 
 function obterTextoAlternativa(pergunta, letra) {
-  const encontrada = listarAlternativas(pergunta).find((item) => item.letra === letra.toUpperCase());
+  const letraLimpa = String(letra || "").trim().toUpperCase();
+  const encontrada = listarAlternativas(pergunta).find((item) => item.letra === letraLimpa);
   return encontrada ? encontrada.texto : "";
 }
 
 function iniciarRodada(nome) {
   const primeira = sortearPergunta(1);
   if (!primeira) return;
+
+  if (temporizadorResposta) {
+    clearTimeout(temporizadorResposta);
+    temporizadorResposta = null;
+  }
 
   estadoJogo = {
     participante: nome,
@@ -394,7 +409,7 @@ function exibirPergunta() {
 
   document.getElementById("titulo-pergunta").textContent = ehPrimeira ? "PERGUNTA 1" : "PERGUNTA 2";
   document.getElementById("nome-participante").textContent = estadoJogo.participante;
-  document.getElementById("enunciado-pergunta").textContent = pergunta.pergunta.toUpperCase();
+  document.getElementById("enunciado-pergunta").textContent = String(pergunta.pergunta ?? "").toUpperCase();
 
   const container = document.getElementById("lista-alternativas");
   container.innerHTML = "";
@@ -410,14 +425,12 @@ function exibirPergunta() {
   });
 
   const botaoConfirmar = document.getElementById("botao-confirmar-resposta");
-  if (botaoConfirmar) {
-    botaoConfirmar.disabled = true;
-    botaoConfirmar.classList.remove("pronto");
-    botaoConfirmar.textContent = "SELECIONE UMA ALTERNATIVA";
-  }
+  botaoConfirmar.disabled = true;
+  botaoConfirmar.textContent = "SELECIONE UMA ALTERNATIVA";
 }
 
 function selecionarAlternativa(letra) {
+  if (estadoJogo.respostaEscolhida) return;
   alternativaSelecionada = letra;
 
   document.querySelectorAll("#lista-alternativas .botao-alternativa").forEach((botao) => {
@@ -425,26 +438,20 @@ function selecionarAlternativa(letra) {
   });
 
   const botaoConfirmar = document.getElementById("botao-confirmar-resposta");
-  if (botaoConfirmar) {
-    botaoConfirmar.disabled = false;
-    botaoConfirmar.classList.add("pronto");
-    botaoConfirmar.textContent = `CONFIRMAR RESPOSTA (LETRA ${letra})`;
-  }
+  botaoConfirmar.disabled = false;
+  botaoConfirmar.textContent = `CONFIRMAR RESPOSTA (LETRA ${letra})`;
 }
 
 function responderAlternativa(letraEscolhida) {
-  const correta = estadoJogo.perguntaAtual.correta.toUpperCase();
+  const correta = String(estadoJogo.perguntaAtual.correta ?? "").trim().toUpperCase();
   const acertou = letraEscolhida === correta;
 
   estadoJogo.respostaEscolhida = letraEscolhida;
   estadoJogo.acertou = acertou;
 
   const botaoConfirmar = document.getElementById("botao-confirmar-resposta");
-  if (botaoConfirmar) {
-    botaoConfirmar.disabled = true;
-    botaoConfirmar.classList.remove("pronto");
-    botaoConfirmar.textContent = acertou ? "RESPOSTA CORRETA!" : "RESPOSTA ENVIADA";
-  }
+  botaoConfirmar.disabled = true;
+  botaoConfirmar.textContent = acertou ? "RESPOSTA CORRETA!" : "RESPOSTA INCORRETA";
 
   document.querySelectorAll("#lista-alternativas .botao-alternativa").forEach((botao) => {
     botao.disabled = true;
@@ -458,7 +465,8 @@ function responderAlternativa(letraEscolhida) {
 
   enviarEstadoAtual();
 
-  setTimeout(() => {
+  temporizadorResposta = setTimeout(() => {
+    temporizadorResposta = null;
     if (acertou && estadoJogo.nivel === 1) {
       estadoJogo.etapa = "DECISAO_PARAR";
       estadoJogo.premio = "PRÊMIO GARANTIDO";
@@ -542,7 +550,7 @@ function encerrarRodada({
 
   const caixaCorreta = document.getElementById("caixa-resposta-correta");
   if (exibirCorreta && estadoJogo.perguntaAtual) {
-    const letraCerta = estadoJogo.perguntaAtual.correta.toUpperCase();
+    const letraCerta = String(estadoJogo.perguntaAtual.correta ?? "").trim().toUpperCase();
     document.getElementById("letra-resposta-correta").textContent = letraCerta;
     document.getElementById("texto-resposta-correta").textContent =
       obterTextoAlternativa(estadoJogo.perguntaAtual, letraCerta);
@@ -552,7 +560,7 @@ function encerrarRodada({
   }
 
   document.getElementById("caixa-curiosidade").textContent =
-    estadoJogo.perguntaAtual ? estadoJogo.perguntaAtual.comentario_apresentador : "";
+    estadoJogo.perguntaAtual ? String(estadoJogo.perguntaAtual.comentario_apresentador ?? "") : "";
 
   exibirEtapa("etapa-resultado");
 
@@ -575,7 +583,11 @@ function encerrarRodada({
   });
 }
 
-function reiniciarParaInicio() {
+function limparEstadoLocalParticipante() {
+  if (temporizadorResposta) {
+    clearTimeout(temporizadorResposta);
+    temporizadorResposta = null;
+  }
   document.getElementById("campo-nome").value = "";
   alternativaSelecionada = "";
   estadoJogo = {
@@ -588,6 +600,10 @@ function reiniciarParaInicio() {
     premio: ""
   };
   exibirEtapa("etapa-inicio");
+}
+
+function reiniciarParaInicio() {
+  limparEstadoLocalParticipante();
   enviarEstadoAtual();
 }
 
@@ -613,12 +629,15 @@ function atualizarApresentador(estado) {
     estado.participante || "AGUARDANDO PARTICIPANTE...";
   document.getElementById("apresentador-etapa").textContent = nomearEtapa(estado.etapa);
 
+  const botaoEncerrar = document.getElementById("botao-encerrar-participacao");
+  botaoEncerrar.disabled = !estado.etapa || estado.etapa === "INICIO";
+
   const pergunta = bancoPerguntas.find((item) => Number(item.id) === Number(estado.pergunta_id));
   const enunciado = document.getElementById("apresentador-enunciado");
   const alternativas = document.getElementById("apresentador-alternativas");
   const gabarito = document.getElementById("apresentador-gabarito");
   const comentario = document.getElementById("apresentador-comentario");
-  const banner = document.getElementById("apresentador-feedback-resposta");
+  const faixaFeedback = document.getElementById("apresentador-feedback-resposta");
 
   if (!pergunta || estado.etapa === "INICIO") {
     document.getElementById("apresentador-rotulo-pergunta").textContent = "PERGUNTA SORTEADA";
@@ -626,47 +645,43 @@ function atualizarApresentador(estado) {
     alternativas.innerHTML = "";
     gabarito.textContent = "—";
     comentario.textContent = "Aguardando o participante iniciar o desafio.";
-    if (banner) {
-      banner.className = "feedback-apresentador oculto";
-      banner.textContent = "";
-    }
+    faixaFeedback.className = "feedback-apresentador oculto";
+    faixaFeedback.textContent = "";
     return;
   }
 
   document.getElementById("apresentador-rotulo-pergunta").textContent =
     `PERGUNTA ${estado.nivel || pergunta.nivel} (#${pergunta.id})`;
-  enunciado.textContent = pergunta.pergunta;
+  enunciado.textContent = String(pergunta.pergunta ?? "");
 
-  const correta = pergunta.correta.toUpperCase();
-  const escolhida = (estado.resposta_escolhida || "").toUpperCase();
+  const correta = String(pergunta.correta ?? "").trim().toUpperCase();
+  const escolhida = String(estado.resposta_escolhida || "").trim().toUpperCase();
   gabarito.textContent = `LETRA ${correta}`;
-  comentario.textContent = pergunta.comentario_apresentador;
+  comentario.textContent = String(pergunta.comentario_apresentador ?? "");
 
-  if (banner) {
-    if (estado.etapa === "DECISAO_PARAR") {
-      banner.className = "feedback-apresentador decisao";
-      banner.textContent = "✓ ACERTOU A 1ª PERGUNTA! Está decidindo se para com o prêmio garantido ou arrisca a 2ª pergunta.";
-    } else if (estado.etapa === "RESULTADO") {
-      if (estado.acertou === "NAO") {
-        banner.className = "feedback-apresentador errou";
-        banner.textContent = `✕ ERROU! Escolheu a letra ${escolhida} — A correta era a letra ${correta}.`;
-      } else if ((estado.premio_atual || "").toUpperCase().includes("DOBRO")) {
-        banner.className = "feedback-apresentador acertou";
-        banner.textContent = "★ ACERTOU AS 2 PERGUNTAS! PRÊMIO EM DOBRO!";
-      } else {
-        banner.className = "feedback-apresentador decisao";
-        banner.textContent = "✓ PAROU NA 1ª PERGUNTA E GARANTIU O PRÊMIO!";
-      }
-    } else if (estado.acertou === "SIM") {
-      banner.className = "feedback-apresentador acertou";
-      banner.textContent = `✓ ACERTOU! Escolheu a letra ${escolhida} (correta).`;
-    } else if (estado.acertou === "NAO") {
-      banner.className = "feedback-apresentador errou";
-      banner.textContent = `✕ ERROU! Escolheu a letra ${escolhida} — A correta é a letra ${correta}.`;
+  if (estado.etapa === "DECISAO_PARAR") {
+    faixaFeedback.className = "feedback-apresentador decisao";
+    faixaFeedback.textContent = "✓ ACERTOU A 1ª PERGUNTA! Está decidindo se para com o prêmio garantido ou arrisca a 2ª pergunta.";
+  } else if (estado.etapa === "RESULTADO") {
+    if (estado.acertou === "NAO") {
+      faixaFeedback.className = "feedback-apresentador errou";
+      faixaFeedback.textContent = `✕ ERROU! Escolheu a letra ${escolhida} — A correta era a letra ${correta}.`;
+    } else if (String(estado.premio_atual || "").toUpperCase().includes("DOBRO")) {
+      faixaFeedback.className = "feedback-apresentador acertou";
+      faixaFeedback.textContent = "★ ACERTOU AS 2 PERGUNTAS! PRÊMIO EM DOBRO!";
     } else {
-      banner.className = "feedback-apresentador oculto";
-      banner.textContent = "";
+      faixaFeedback.className = "feedback-apresentador decisao";
+      faixaFeedback.textContent = "✓ PAROU NA 1ª PERGUNTA E GARANTIU O PRÊMIO!";
     }
+  } else if (estado.acertou === "SIM") {
+    faixaFeedback.className = "feedback-apresentador acertou";
+    faixaFeedback.textContent = `✓ ACERTOU! Escolheu a letra ${escolhida} (correta).`;
+  } else if (estado.acertou === "NAO") {
+    faixaFeedback.className = "feedback-apresentador errou";
+    faixaFeedback.textContent = `✕ ERROU! Escolheu a letra ${escolhida} — A correta é a letra ${correta}.`;
+  } else {
+    faixaFeedback.className = "feedback-apresentador oculto";
+    faixaFeedback.textContent = "";
   }
 
   alternativas.innerHTML = listarAlternativas(pergunta)
@@ -711,10 +726,10 @@ function atualizarTv(estado) {
 
   document.getElementById("tv-titulo-pergunta").textContent = `PERGUNTA ${nivel}`;
   document.getElementById("tv-participante").textContent = estado.participante || "";
-  document.getElementById("tv-enunciado").textContent = pergunta.pergunta.toUpperCase();
+  document.getElementById("tv-enunciado").textContent = String(pergunta.pergunta ?? "").toUpperCase();
 
-  const correta = pergunta.correta.toUpperCase();
-  const escolhida = (estado.resposta_escolhida || "").toUpperCase();
+  const correta = String(pergunta.correta ?? "").trim().toUpperCase();
+  const escolhida = String(estado.resposta_escolhida || "").trim().toUpperCase();
   const respondeu = escolhida !== "" || estado.etapa === "RESULTADO" || estado.etapa === "DECISAO_PARAR";
 
   document.getElementById("tv-alternativas").innerHTML = listarAlternativas(pergunta)
@@ -731,15 +746,21 @@ function atualizarTv(estado) {
   const faixa = document.getElementById("tv-faixa-resultado");
   if (estado.etapa === "DECISAO_PARAR") {
     faixa.className = "faixa-resultado-tv acerto";
-    faixa.textContent = "VOCÊ ACERTOU! PARAR E GARANTIR OU IR PARA A PERGUNTA 2?";
+    faixa.textContent = "✓ VOCÊ ACERTOU! PARAR E GARANTIR OU IR PARA A PERGUNTA 2?";
   } else if (estado.etapa === "RESULTADO") {
     if (estado.acertou === "NAO") {
       faixa.className = "faixa-resultado-tv erro";
-      faixa.textContent = `RESPOSTA CORRETA: ${correta}) ${obterTextoAlternativa(pergunta, correta).toUpperCase()}`;
+      faixa.textContent = `✕ NÃO FOI DESSA VEZ — RESPOSTA CORRETA: ${correta}) ${obterTextoAlternativa(pergunta, correta).toUpperCase()}`;
     } else {
       faixa.className = "faixa-resultado-tv acerto";
-      faixa.textContent = `${estado.participante} — ${estado.premio_atual || "PARABÉNS!"}`;
+      faixa.textContent = `✓ ${estado.participante} — ${estado.premio_atual || "PARABÉNS!"}`;
     }
+  } else if (estado.acertou === "SIM") {
+    faixa.className = "faixa-resultado-tv acerto";
+    faixa.textContent = "✓ RESPOSTA CORRETA!";
+  } else if (estado.acertou === "NAO") {
+    faixa.className = "faixa-resultado-tv erro";
+    faixa.textContent = `✕ RESPOSTA INCORRETA! A CORRETA É A LETRA ${correta}) ${obterTextoAlternativa(pergunta, correta).toUpperCase()}`;
   } else {
     faixa.className = "faixa-resultado-tv oculto";
     faixa.textContent = "";
@@ -753,7 +774,7 @@ function renderizarItensHistorico(lista) {
 
   return lista
     .map((item) => {
-      const resultado = (item.resultado_final || "").toUpperCase();
+      const resultado = String(item.resultado_final || "").toUpperCase();
       let classe = "";
       if (resultado.includes("2 PERGUNTAS") || resultado.includes("DOBRO")) classe = "dobrou";
       else if (resultado.includes("NÃO")) classe = "errou";

@@ -266,7 +266,7 @@ body.modo-tv .seletor-modos:hover {
   padding: 18px 26px;
   cursor: pointer;
   border: 2px solid var(--preto);
-  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
 .botao-principal {
@@ -356,11 +356,18 @@ body.modo-tv .seletor-modos:hover {
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 .botao-alternativa:hover:not(:disabled) {
   background: var(--preto);
+  color: #FFFFFF;
+}
+
+.botao-alternativa.selecionada,
+.botao-alternativa.selecionada:hover:not(:disabled) {
+  background: var(--azul);
+  border-color: var(--azul);
   color: #FFFFFF;
 }
 
@@ -374,6 +381,14 @@ body.modo-tv .seletor-modos:hover {
   justify-content: center;
   border: 1.5px solid currentColor;
   flex-shrink: 0;
+}
+
+.area-confirmar-resposta {
+  margin-top: 22px;
+}
+
+.botao-confirmar-resposta {
+  width: 100%;
 }
 
 .correta {
@@ -461,9 +476,18 @@ body.modo-tv .seletor-modos:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 20px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--cinza-borda);
+}
+
+.acoes-ao-vivo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .indicador-ao-vivo {
@@ -522,6 +546,35 @@ body.modo-tv .seletor-modos:hover {
   margin-bottom: 20px;
 }
 
+.feedback-apresentador {
+  margin: 10px 0 12px;
+  padding: 12px 16px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-left: 5px solid var(--azul);
+  background: var(--fundo-creme);
+}
+
+.feedback-apresentador.acertou {
+  border-left-color: var(--verde);
+  background: #EDF8E8;
+  color: #1F5B0B;
+}
+
+.feedback-apresentador.errou {
+  border-left-color: var(--vermelho);
+  background: #FDECEC;
+  color: #991B1B;
+}
+
+.feedback-apresentador.decisao {
+  border-left-color: var(--amarelo);
+  background: #FEFBE6;
+  color: var(--preto);
+}
+
 .enunciado-apresentador {
   font-size: 1.15rem;
   font-weight: 700;
@@ -543,6 +596,20 @@ body.modo-tv .seletor-modos:hover {
 .item-alternativa-apresentador.gabarito {
   border: 2px solid var(--verde);
   background: #F1F9ED;
+  font-weight: 700;
+}
+
+.item-alternativa-apresentador.escolhida-correta {
+  border: 2px solid var(--verde);
+  background: var(--verde);
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+.item-alternativa-apresentador.escolhida-errada {
+  border: 2px solid var(--vermelho);
+  background: #FDECEC;
+  color: #991B1B;
   font-weight: 700;
 }
 
@@ -597,16 +664,24 @@ body.modo-tv .seletor-modos:hover {
   font-family: 'Montserrat', sans-serif;
   font-size: 0.7rem;
   font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   padding: 6px 10px;
   border: 1.5px solid var(--preto);
   background: transparent;
   color: var(--preto);
   cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
 
-.botao-pequeno:hover {
+.botao-pequeno:hover:not(:disabled) {
   background: var(--preto);
   color: #FFFFFF;
+}
+
+.botao-pequeno:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .botao-pequeno-perigo {
@@ -614,7 +689,7 @@ body.modo-tv .seletor-modos:hover {
   color: var(--vermelho);
 }
 
-.botao-pequeno-perigo:hover {
+.botao-pequeno-perigo:hover:not(:disabled) {
   background: var(--vermelho);
   color: #FFFFFF;
 }
@@ -737,11 +812,13 @@ body.modo-tv .seletor-modos:hover {
 .faixa-resultado-tv.acerto {
   border-left-color: var(--verde);
   background: #EDF8E8;
+  color: #1F5B0B;
 }
 
 .faixa-resultado-tv.erro {
   border-left-color: var(--vermelho);
   background: #FDECEC;
+  color: #991B1B;
 }
 
 .titulo-lista-tv {
